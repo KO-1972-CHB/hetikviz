@@ -1,7 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { createSharedStore } from './shared-store';
 import fs from 'fs';
 import ZipStream from 'zip-stream';
 import { registerPublishedQuizzes } from './published-quizzes';
@@ -15,6 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const store = createSharedStore();
 const PORT = Number(process.env.PORT) || 3000;
 
 app.disable('x-powered-by');
@@ -22,9 +24,11 @@ app.use(express.json({ limit: '128kb' }));
 const isDev = path.extname(__filename) === '.ts' && process.env.NODE_ENV !== 'production';
 const { requireTeacher, limitGeneration, limitDownload, limitPublish } = registerTeacherAccess(app, {
   password: process.env.TEACHER_PASSWORD,
-  secure: process.env.NODE_ENV === 'production',
+  secure: process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL),
+  store,
+  sharedRequired: Boolean(process.env.VERCEL),
 });
-registerPublishedQuizzes(app, requireTeacher, limitPublish);
+registerPublishedQuizzes(app, requireTeacher, limitPublish, store);
 
 import { NYELVTAN_CURRICULUM } from './src/data/curriculum';
 
@@ -270,6 +274,7 @@ interface SourceFileEntry {
 }
 
 function getAllProjectSourceFiles(): SourceFileEntry[] {
+  if (process.env.VERCEL) return collectSourceFiles(process.cwd());
   if (isDev) return collectSourceFiles(__dirname);
 
   const snapshotPath = path.join(__dirname, 'source-snapshot.json');
@@ -329,8 +334,9 @@ app.get('/api/download-source-zip', requireTeacher, limitDownload, async (_req, 
   }
 });
 
+app.use('/api', (_req, res) => res.status(404).json({ error: 'Ismeretlen művelet.' }));
+
 async function startServer() {
-  app.use('/api', (_req, res) => res.status(404).json({ error: 'Ismeretlen művelet.' }));
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -354,4 +360,8 @@ async function startServer() {
   });
 }
 
-startServer();
+export default app;
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  void startServer();
+}

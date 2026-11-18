@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm ci",
+  "buildCommand": "npx vite build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/quiz-service.ts": {
+      "includeFiles": "{src/**,scripts/**,api/**,README.md,package.json,package-lock.json,server.ts,teacher-access.ts,published-quizzes.ts,shared-store.ts,index.html,tsconfig.json,vite.config.ts,metadata.json,vercel.json,.env.example,.gitignore}",
+      "maxDuration": 145
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/quiz-service?__quiz_api=:path*" }
+  ]
+}

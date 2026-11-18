@@ -1,3 +1,4 @@
+import type { SharedStore } from './shared-store';
 import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
@@ -21,18 +22,42 @@ function rateLimit(max: number, windowMs: number) {
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
-export function registerTeacherAccess(app: Express, { password, secure }: { password?: string; secure: boolean }) {
+export function registerTeacherAccess(app: Express, {
+  password, secure, store, sharedRequired,
+}: { password?: string; secure: boolean; store: SharedStore; sharedRequired: boolean }) {
   const expectedPassword = password && password.length >= 16 ? digest(password) : null;
   const sessions = new Map<string, number>();
   const cookieOptions: import("express").CookieOptions = { httpOnly: true, sameSite: "strict", secure, path: "/api" };
-  const limitLogin = rateLimit(10, 60_000)(1);
-  const limitGeneration = rateLimit(12, 60_000);
-  const limitDownload = rateLimit(5, 60_000)(1);
+  const unavailable = (res: Response) => res.status(503).json({ error: 'A tanári munkamenet tárolója nem érhető el.' });
+  const safely = (handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>): RequestHandler =>
+    (req, res, next) => {
+      void handler(req, res, next).catch(error => {
+        console.error('Teacher session store:', error instanceof Error ? error.message : 'unknown error');
+        if (!res.headersSent) unavailable(res);
+      });
+    };
 
+  const limiter = (name: string, max: number) => {
+    if (!store) return rateLimit(max, 60_000);
+    return (cost = 1): RequestHandler => safely(async (_req, res, next) => {
+      const retry = await store.take(`limit:${name}`, max, cost, 60_000);
+      if (retry !== 0) {
+        res.set('Retry-After', String(Math.max(1, Math.ceil(retry / 1000))));
+        return res.status(429).json({ error: 'Túl sok kérés. Próbáld később!' });
+      }
+      next();
+    });
+  };
+  const limitLogin = limiter('login', 10)(1);
+  const limitGeneration = limiter('generation', 12);
+  const limitDownload = limiter('download', 5)(1);
+  const sessionKey = (token: string) => `session:${expectedPassword?.toString('hex').slice(0, 16)}:${digest(token).toString('hex')}`;
   const getToken = (req: Request) => req.headers.cookie?.match(/(?:^|;\s*)hetikviz_teacher=([a-f0-9]{64})(?:;|$)/)?.[1];
-  const isTeacher = (req: Request) => {
+  const isTeacher = async (req: Request) => {
     const token = getToken(req);
-    return token !== undefined && (sessions.get(token) ?? 0) > Date.now();
+    if (!token || !expectedPassword) return false;
+    if (store) return (await store.get(sessionKey(token))) === 'active';
+    return !sharedRequired && (sessions.get(token) ?? 0) > Date.now();
   };
   const noCache: RequestHandler = (_req, res, next) => {
     res.set("Cache-Control", "no-store");
@@ -46,49 +71,53 @@ export function registerTeacherAccess(app: Express, { password, secure }: { pass
     next();
   };
 
-  app.get("/api/teacher/session", noCache, (req, res) => {
-    res.json({ authenticated: isTeacher(req) });
-  });
+  app.get("/api/teacher/session", noCache, safely(async (req, res) => {
+    res.json({ authenticated: await isTeacher(req) });
+  }));
 
-  app.post("/api/teacher/session", noCache, requireJson, (req, res, next) => {
-    if (!expectedPassword) {
-      return res.status(503).json({ error: "A tanári belépés még nincs beállítva." });
-    }
-    if (isTeacher(req)) return res.json({ authenticated: true });
+  app.post("/api/teacher/session", noCache, requireJson, safely(async (req, res, next) => {
+    if (!expectedPassword) return res.status(503).json({ error: "A tanári belépés még nincs beállítva." });
+    if (sharedRequired && !store) return unavailable(res);
+    if (await isTeacher(req)) return res.json({ authenticated: true });
     limitLogin(req, res, next);
-  }, (req, res) => {
+  }), safely(async (req, res) => {
     const supplied = req.body?.password;
     if (!expectedPassword || typeof supplied !== "string" || !timingSafeEqual(digest(supplied), expectedPassword)) {
       return res.status(401).json({ error: "Hibás tanári jelszó." });
     }
-    const now = Date.now();
-    for (const [token, expiry] of sessions) {
-      if (expiry <= now) sessions.delete(token);
-    }
-    if (sessions.size >= maxSessions) {
-      return res.status(503).json({ error: "Túl sok aktív tanári munkamenet." });
-    }
     const token = randomBytes(32).toString("hex");
-    sessions.set(token, now + sessionLifetime);
+    if (store) {
+      await store.setSession(sessionKey(token), sessionLifetime);
+    } else {
+      const now = Date.now();
+      for (const [key, expiry] of sessions) {
+        if (expiry <= now) sessions.delete(key);
+      }
+      if (sessions.size >= maxSessions) {
+        return res.status(503).json({ error: "Túl sok aktív tanári munkamenet." });
+      }
+      sessions.set(token, now + sessionLifetime);
+    }
     res.cookie(cookieName, token, { ...cookieOptions, maxAge: sessionLifetime });
     res.json({ authenticated: true });
-  });
+  }));
 
-  app.delete("/api/teacher/session", noCache, requireJson, (req, res) => {
+  app.delete("/api/teacher/session", noCache, requireJson, safely(async (req, res) => {
     const token = getToken(req);
-    if (token) sessions.delete(token);
+    if (token && store) await store.remove(sessionKey(token));
+    else if (token) sessions.delete(token);
     res.clearCookie(cookieName, cookieOptions);
     res.sendStatus(204);
-  });
+  }));
 
-  function requireTeacher(req: Request, res: Response, next: NextFunction) {
+  const requireTeacher = safely(async (req, res, next) => {
     res.set("Cache-Control", "no-store");
-    if (!isTeacher(req)) {
+    if (!(await isTeacher(req))) {
       return res.status(401).json({ success: false, error: "Jelentkezz be újra a tanári felületre." });
     }
     if (req.method === "POST") return requireJson(req, res, next);
     next();
-  }
+  });
 
-  return { requireTeacher, limitGeneration, limitDownload, limitPublish: rateLimit(10, 60_000)(1) };
+  return { requireTeacher, limitGeneration, limitDownload, limitPublish: limiter('publish', 10)(1) };
 }

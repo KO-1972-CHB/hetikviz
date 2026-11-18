@@ -6,6 +6,8 @@ const ROOT_FILES = [
   'package-lock.json',
   'README.md',
   'teacher-access.ts',
+  'shared-store.ts',
+  'vercel.json',
   'published-quizzes.ts',
   'index.html',
   'server.ts',
@@ -16,7 +18,7 @@ const ROOT_FILES = [
   '.gitignore',
 ];
 
-const INCLUDE_DIRS = ['src', 'scripts'];
+const INCLUDE_DIRS = ['src', 'scripts', 'api'];
 
 const EXCLUDED_NAMES = new Set([
   'node_modules',
