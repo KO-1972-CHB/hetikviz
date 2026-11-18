@@ -47,6 +47,7 @@ class AiServiceError extends Error {
     readonly publicMessage: string,
     readonly diagnostic: string,
     readonly status = 502,
+    readonly canTryAnotherModel = false,
   ) {
     super(diagnostic);
   }
@@ -81,30 +82,51 @@ async function rejectAiResponse(response: Response): Promise<never> {
     throw new AiServiceError('Az OpenAI API-kerete elfogyott vagy a számlázás még nincs beállítva. Ellenőrizd az OpenAI Platform számlázását és a projekt költési keretét.', diagnostic, 503);
   }
   if (response.status === 403 || response.status === 404 || code === 'model_not_found') {
-    throw new AiServiceError(`A(z) ${aiName} nem engedélyezte a kért modell használatát. Ellenőrizd az API-projekt hozzáférését és a(z) ${modelVariable} beállítást.`, diagnostic);
+    throw new AiServiceError(`A(z) ${aiName} nem engedélyezte a kért modell használatát. Ellenőrizd az API-projekt hozzáférését és a(z) ${modelVariable} beállítást.`, diagnostic, 502, response.status === 404 || code === 'model_not_found');
   }
   if (response.status === 429) {
     throw new AiServiceError(useOpenAi
       ? 'Az OpenAI túl sok kérést kapott. Várj egy kicsit, és próbáld újra.'
-      : 'A Gemini elérte a Google-projekt kéréskorlátját vagy kvótáját. Próbáld később, vagy ellenőrizd a modell keretét a Google AI Studióban.', diagnostic, 503);
+      : 'A Gemini elérte a Google-projekt kéréskorlátját vagy kvótáját. Próbáld később, vagy ellenőrizd a modell keretét a Google AI Studióban.', diagnostic, 503, true);
   }
   if (response.status === 400) {
     throw new AiServiceError(`A(z) ${aiName} nem fogadta el a kérést. Ellenőrizd, hogy a kiválasztott modell támogatja-e a strukturált JSON-válaszokat.`, diagnostic);
   }
-  throw new AiServiceError(`A(z) ${aiName} átmenetileg nem elérhető. Próbáld újra később.`, diagnostic, 503);
+  throw new AiServiceError(`A(z) ${aiName} átmenetileg nem elérhető. Próbáld újra később.`, diagnostic, 503, response.status >= 500);
 }
 
-async function requestAiJson(name: string, prompt: string, instructions: string, schema: object, timeoutMs = 55_000) {
+const geminiModels = [
+  { model: aiModel, thinking: thinkingLevel },
+  { model: 'gemini-3.1-flash-lite', thinking: 'MINIMAL' },
+  { model: 'gemini-flash-latest', thinking: undefined },
+].filter(({ model }, index, models) => models.findIndex(candidate => candidate.model === model) === index);
+
+async function requestAiJson(name: string, prompt: string, instructions: string, schema: object) {
+  if (useOpenAi) return requestAiModel(name, prompt, instructions, schema, { model: aiModel }, 55_000);
+
+  for (const [index, model] of geminiModels.entries()) {
+    try {
+      return await requestAiModel(name, prompt, instructions, schema, model, 35_000);
+    } catch (error) {
+      if (!(error instanceof AiServiceError) || !error.canTryAnotherModel || index === geminiModels.length - 1) throw error;
+      console.warn('Gemini fallback:', model.model, error.diagnostic, '→', geminiModels[index + 1].model);
+    }
+  }
+  throw new Error('No Gemini model configured');
+}
+
+async function requestAiModel(name: string, prompt: string, instructions: string, schema: object,
+  { model, thinking }: { model: string; thinking?: string }, timeoutMs: number) {
   if (!aiKey) throw new Error('Az AI-szolgáltató még nincs beállítva.');
   const endpoint = useOpenAi
     ? 'https://api.openai.com/v1/chat/completions'
-    : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiModel)}:generateContent`;
+    : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (useOpenAi) headers.Authorization = `Bearer ${aiKey}`;
   else headers['x-goog-api-key'] = aiKey;
 
   const body = useOpenAi ? {
-    model: aiModel,
+    model,
     messages: [{ role: 'system', content: instructions }, { role: 'user', content: prompt }],
     response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
   } : {
@@ -113,7 +135,7 @@ async function requestAiJson(name: string, prompt: string, instructions: string,
     generationConfig: {
       responseMimeType: 'application/json',
       responseJsonSchema: schema,
-      ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
+      ...(thinking ? { thinkingConfig: { thinkingLevel: thinking } } : {}),
     },
   };
 
@@ -121,9 +143,9 @@ async function requestAiJson(name: string, prompt: string, instructions: string,
     method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs), body: JSON.stringify(body),
   }).catch((error: unknown) => {
     if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new AiServiceError(`A(z) ${aiName} válasza túl sokáig tartott. Próbáld újra, vagy készíts egyszerre egy kvízt.`, 'request timeout', 504);
+      throw new AiServiceError(`A(z) ${aiName} válasza túl sokáig tartott. Próbáld újra, vagy készíts egyszerre egy kvízt.`, 'request timeout', 504, true);
     }
-    throw new AiServiceError(`A szerver nem éri el a(z) ${aiName} API-t. Próbáld újra később.`, 'connection failed', 503);
+    throw new AiServiceError(`A szerver nem éri el a(z) ${aiName} API-t. Próbáld újra később.`, 'connection failed', 503, true);
   });
   if (!response.ok) return rejectAiResponse(response);
   const reply = await response.json();
@@ -147,7 +169,7 @@ async function requestAiJson(name: string, prompt: string, instructions: string,
 }
 
 // Helper: Generates a 10-question quiz for a given CEFR level and grammar topic
-async function generateQuizData(level: string, topic: string, count = 10, timeoutMs?: number) {
+async function generateQuizData(level: string, topic: string, count = 10) {
   const prompt = `Készíts egy ${count} kérdésből álló, kiváló minőségű feleletválasztós angol nyelvtani és szókincs kvízt a Gyakorlatias Angol közösség számára.
 Célcsoport szintje: CEFR ${level} (pl. A1 Kezdő, A2 Alapfok, B1 Középhaladó, B2 Haladó).
 Téma / fókusz: "${topic}".
@@ -196,7 +218,7 @@ Követelmények:
     },
   };
 
-  const parsed = await requestAiJson('weekly_quiz', prompt, config.systemInstruction, config.responseSchema, timeoutMs);
+  const parsed = await requestAiJson('weekly_quiz', prompt, config.systemInstruction, config.responseSchema);
   if (!Array.isArray(parsed?.questions) || parsed.questions.length !== count) {
     throw new Error('The generator returned an unexpected number of questions');
   }
@@ -322,29 +344,25 @@ app.post('/api/generate-weekly-bundle', requireTeacher, limitGeneration(4), asyn
       };
     });
 
-    // Execute sequentially with slight spacing to prevent simultaneous burst rate limits / 503 spikes
-    const results = [];
-    for (let i = 0; i < topicAssignments.length; i++) {
-      const t = topicAssignments[i];
-      const data = await generateQuizData(t.level, t.topic, 10, 30_000);
-      results.push({
-        level: t.level,
-        topic: t.topic,
-        topicNumber: t.topicNumber,
-        data,
-      });
-
-      // Small 300ms pause between questions to space out provider requests
-      if (i < topicAssignments.length - 1) {
-        await new Promise((r) => setTimeout(r, 350));
+    const outcomes = await Promise.all(topicAssignments.map(async (assignment, index) => {
+      // Slightly stagger the parallel requests.
+      if (index) await new Promise(resolve => setTimeout(resolve, index * 150));
+      try {
+        const data = await generateQuizData(assignment.level, assignment.topic);
+        return { ok: true as const, ...assignment, data };
+      } catch (error) {
+        const failure = aiErrorResponse(error, 'A kvíz generálása sikertelen.');
+        return { ok: false as const, ...assignment, error: failure.message, status: failure.status };
       }
+    }));
+    const quizzes = outcomes.filter(result => result.ok).map(({ ok, ...quiz }) => quiz);
+    const failures = outcomes.filter(result => !result.ok).map(({ ok, ...failure }) => failure);
+    if (!quizzes.length) {
+      return res.status(failures[0]?.status ?? 502).json({
+        success: false, error: failures[0]?.error ?? 'A heti kvízek generálása sikertelen.', failures,
+      });
     }
-
-    return res.json({
-      success: true,
-      weekNumber: Number(weekNumber) || 46,
-      quizzes: results,
-    });
+    return res.json({ success: true, weekNumber, quizzes, failures });
   } catch (error) {
     const failure = aiErrorResponse(error, 'Az AI-generálás sikertelen. Próbáld újra később.');
     return res.status(failure.status).json({ success: false, error: failure.message });

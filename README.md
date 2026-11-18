@@ -12,7 +12,11 @@ A tanári belépéshez a szerveren állíts be egy egyedi, legalább 16 karakter
 `TEACHER_PASSWORD` jelszót. Az alapértelmezett AI-szolgáltató a Gemini,
 amelyhez `GEMINI_API_KEY` kell. A `GEMINI_MODEL` alapértéke
 `gemini-flash-latest`. A `GEMINI_THINKING_LEVEL=LOW` csak olyan
-modellhez állítandó be, amely támogatja ezt az értéket. Az OpenAI választható az `AI_PROVIDER=openai`
+modellhez állítandó be, amely támogatja ezt az értéket. Átmeneti Gemini-hibánál, időtúllépésnél
+vagy hiányzó modellnél a rendszer a `gemini-3.1-flash-lite`, majd a
+`gemini-flash-latest` modellt próbálja, ismétlés nélkül. A négy heti
+kvíz egymással párhuzamosan készül. Részleges siker esetén az elkészült
+tervezetek megnyithatók, a hibás szint külön újrapróbálható. Az OpenAI választható az `AI_PROVIDER=openai`
 beállítással és `OPENAI_API_KEY` kulccsal. Helyben a Gitből kizárt
 `.env` fájl használható. Élesben az üzemeltető
 titoktárolóját, HTTPS-t és `NODE_ENV=production` beállítást használd.

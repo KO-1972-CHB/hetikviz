@@ -65,6 +65,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   // 1-Click Multi-Level Bundle State
   const [isGeneratingBundle, setIsGeneratingBundle] = useState(false);
   const [bundleQuizzes, setBundleQuizzes] = useState<QuizPackage[] | null>(null);
+  const [bundleFailures, setBundleFailures] = useState<{ level: CefrLevel; topic: string; error: string }[]>([]);
   const [copiedBundlePost, setCopiedBundlePost] = useState(false);
 
   const handleDownloadSourceZip = () => {
@@ -124,8 +125,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   const handleGenerateBundle = async () => {
     setIsGeneratingBundle(true);
     setErrorMessage(null);
-    setBundleQuizzes(null);
-    setGeneratedQuiz(null);
+    setBundleFailures([]);
 
     try {
       const response = await fetch('/api/generate-weekly-bundle', {
@@ -135,6 +135,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
       });
 
       const json = await response.json();
+      setBundleFailures(json.failures || []);
       if (!response.ok || !json.success) {
         throw new Error(json.error || 'Hiba történt a 4 szintes heti kvízcsomag generálása közben.');
       }
@@ -165,7 +166,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
       });
 
       setBundleQuizzes(createdPackages);
-      setGeneratedQuiz(createdPackages[0]);
+      setGeneratedQuiz(createdPackages[0] ?? null);
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message || 'Nem sikerült legenerálni a 4 szintes kvízcsomagot. Ellenőrizd a kapcsolatot!');
@@ -223,6 +224,12 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
         })),
       };
 
+      if (bundleQuizzes?.[0]?.weekNumber === newPackage.weekNumber &&
+          !bundleQuizzes.some(quiz => quiz.level === newPackage.level) &&
+          bundleFailures.some(failure => failure.level === newPackage.level && failure.topic === newPackage.topic)) {
+        setBundleQuizzes(current => current ? [...current, newPackage].sort((a, b) => a.level.localeCompare(b.level)) : current);
+        setBundleFailures(failures => failures.filter(failure => failure.level !== newPackage.level));
+      }
       setGeneratedQuiz(newPackage);
     } catch (err: any) {
       console.error(err);
@@ -460,6 +467,21 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   </div>
                 )}
 
+                {bundleFailures.length > 0 && (
+                  <ul aria-label="Sikertelen szintek" className="space-y-2">
+                    {bundleFailures.map(({ level: failedLevel, topic: failedTopic, error }) => (
+                      <li key={failedLevel} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                        <p><strong>{failedLevel}</strong> · {failedTopic}</p>
+                        <p>{error}</p>
+                        <button className="quiz-dialog-tab mt-2" onClick={() => {
+                          setLevel(failedLevel);
+                          setTopic(failedTopic);
+                        }}>{failedLevel} beállítása külön generáláshoz</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 {/* Bundle Results Preview */}
                 {bundleQuizzes && (
                   <div className="bg-white rounded-2xl p-4 border border-emerald-300 shadow-xs space-y-3 animate-in fade-in">
@@ -467,7 +489,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                       <div className="flex items-center space-x-2">
                         <CheckCheck className="w-5 h-5 text-emerald-600" />
                         <span className="font-extrabold text-xs sm:text-sm text-emerald-950">
-                          Sikeresen elkészült mind a 4 heti kvíz ({week}. hét)!
+                          Elkészült {bundleQuizzes.length} heti kvíz a négyből ({bundleQuizzes[0].weekNumber}. hét).
                         </span>
                       </div>
                       <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
@@ -511,7 +533,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <button
                         onClick={() => handleCopyBundlePost(bundleQuizzes)}
-                        disabled={bundleQuizzes.some(quiz => !quiz.publishedId)}
+                        disabled={bundleQuizzes.length !== 4 || bundleQuizzes.some(quiz => !quiz.publishedId)}
                         className="flex-1 py-2.5 px-3 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-xs cursor-pointer"
                         title="Formázott Facebook bejegyzés a 4 szint közvetlen linkjeivel a csoport számára"
                       >
