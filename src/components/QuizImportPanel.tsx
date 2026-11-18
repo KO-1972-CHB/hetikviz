@@ -16,7 +16,7 @@ export function QuizImportPanel({ level, topic, weekNumber, disabled, onImport }
   const prompt = `Készíts pontosan 10 angol mondatkiegészítő kérdést magyar tanulóknak.
 Szint: ${level}. Téma: ${topic.trim() || 'Angol nyelvtan'}.
 Minden mondatban egyetlen hiányzó rész legyen: ___. Adj 3 vagy 4 különböző válaszlehetőséget, amelyek közül pontosan egy helyes. Az index 0-tól indul. Add meg a szabály rövid magyar magyarázatát, a kitöltött mondat magyar fordítását és opcionálisan egy tippet.
-A válasz kizárólag JSON-objektum legyen az alábbi mezőkkel. A minta egyetlen kérdést mutat, a tényleges válaszban pontosan tíz különböző kérdés legyen:
+Adj rövid, témaközpontú címet (legfeljebb 55 karakter) és tárgyilagos leírást (legfeljebb 85 karakter). A válasz kizárólag JSON-objektum legyen az alábbi mezőkkel. A minta egyetlen kérdést mutat, a tényleges válaszban pontosan tíz különböző kérdés legyen:
 {"title":"A kvíz címe","description":"Rövid leírás","level":"${level}","questions":[{"question":"She ___ every morning.","options":["runs","run","running"],"correctIndex":0,"explanation":"Egyes szám harmadik személyben az igéhez -s végződés kerül.","translation":"Minden reggel fut.","tip":"Figyeld az alanyt."}]}`;
 
   async function copyPrompt() {

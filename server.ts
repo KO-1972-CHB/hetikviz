@@ -168,6 +168,21 @@ async function requestAiModel(name: string, prompt: string, instructions: string
   return JSON.parse(message.content);
 }
 
+const quizTitleLimit = 55;
+const quizDescriptionLimit = 85;
+
+function compactText(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
+function limitTopicTitle(topic: string): string {
+  const text = compactText(topic);
+  if (text.length <= quizTitleLimit) return text;
+  const start = text.slice(0, quizTitleLimit - 1);
+  const boundary = start.lastIndexOf(' ');
+  return (boundary > 0 ? start.slice(0, boundary) : start) + '…';
+}
+
 // Helper: Generates a 10-question quiz for a given CEFR level and grammar topic
 async function generateQuizData(level: string, topic: string, count = 10) {
   const prompt = `Készíts egy ${count} kérdésből álló, kiváló minőségű feleletválasztós angol nyelvtani és szókincs kvízt a Gyakorlatias Angol közösség számára.
@@ -181,7 +196,7 @@ Követelmények:
 5. "explanation": Világos, barátságos, könnyen megjegyezhető MAGYAR magyarázat a helyes válasz okáról (pl. miért nem jó a másik opció).
 6. "translation": A teljes mondat pontos és természetes MAGYAR fordítása.
 7. "tip": Rövid tipp vagy memoriter a magyar tanulóknak.
-8. Adj egy találó kvíz címet ("title") és egy 1 mondatos leírást ("description").`;
+8. A "title" legyen témaközpontú cím, legfeljebb ${quizTitleLimit} karakter (pl. "Személyes és birtokos névmások"). A "description" legyen egy tárgyilagos mondat, legfeljebb ${quizDescriptionLimit} karakter. Kerüld a felhívásokat, reklámszöveget és emojikat.`;
 
   const config = {
     systemInstruction:
@@ -190,8 +205,8 @@ Követelmények:
       type: 'object',
       additionalProperties: false,
       properties: {
-        title: { type: 'string', description: 'A kvíz címe magyarul és angolul' },
-        description: { type: 'string', description: 'Rövid leírás vagy instrukció' },
+        title: { type: 'string', description: `Rövid, témaközpontú cím, legfeljebb ${quizTitleLimit} karakter` },
+        description: { type: 'string', description: `Tárgyilagos leírás, legfeljebb ${quizDescriptionLimit} karakter` },
         level: { type: 'string', description: 'A1, A2, B1 vagy B2' },
         questions: {
           type: 'array',
@@ -247,7 +262,14 @@ Követelmények:
       };
     });
   }
-  return parsed;
+  const title = compactText(parsed.title);
+  const description = compactText(parsed.description);
+  return {
+    ...parsed,
+    title: title && title.length <= quizTitleLimit ? title : limitTopicTitle(topic) || 'Heti angol kvíz',
+    description: description && description.length <= quizDescriptionLimit
+      ? description : `${count} kérdés magyar magyarázatokkal.`,
+  };
 }
 
 app.post('/api/review-quiz', requireTeacher, limitGeneration(), async (req, res) => {

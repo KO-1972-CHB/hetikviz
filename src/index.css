@@ -185,6 +185,11 @@
     border-bottom: 1px solid #cce1eb;
   }
 
+  .teacher-studio-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
   .quiz-dialog-icon, .quiz-dialog-close {
     display: grid;
     flex: none;

@@ -329,7 +329,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
         }`}
       >
         {/* Header */}
-        <div className="quiz-dialog-heading">
+        <div className="quiz-dialog-heading teacher-studio-heading">
           <div className="flex min-w-0 items-center gap-3">
             <div className="quiz-dialog-icon bg-[#ede3fa] text-[#62408d]">
               <Sparkles className="w-5 h-5" />
@@ -339,11 +339,18 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 Tanári Vezérlő & AI Kvízkészítő
               </h2>
               <p className="mt-1 text-sm text-[#426075]">
-                Készíts új 10 kérdéses heti csomagokat a közösségnek másodpercek alatt!
+                Heti kvízek készítése, importálása és ellenőrzése.
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={onClose}
+            aria-label="Tanári Stúdió bezárása"
+            className="quiz-dialog-close self-start"
+          >
+            <X className="w-5 h-5" aria-hidden="true" />
+          </button>
+          <div className="col-span-2 flex flex-wrap items-center gap-1.5">
             <button
               onClick={handleDownloadSourceZip}
               disabled={isDownloadingZip}
@@ -363,13 +370,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 <span>4.0 útmutató</span>
               </button>
             )}
-            <button
-              onClick={onClose}
-              aria-label="Tanári Stúdió bezárása"
-              className="quiz-dialog-close"
-            >
-              <X className="w-5 h-5" />
-            </button>
+
           </div>
         </div>
 
