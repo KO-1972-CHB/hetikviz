@@ -28,3 +28,22 @@ csomag négy generálásnak számít.
 - A mentett kvízek, kitűzések és eredmények az adott böngészőben és az adott
   webcímen érhetők el. A korábbi adatok ellenőrzéséhez használd ugyanazt a
   böngészőprofilt és webcímet. Egy külön tesztoldal saját böngészőtárolót kap.
+
+## Kvízek közzététele
+
+A Tanári Stúdióban a generált kvíz tervezetként jelenik meg. A kérdések
+szerkeszthetők, az alkalmazás ellenőrzi a kérdésszámot, a feladatformát,
+a megoldókulcsot, az ismétlődéseket, a magyarázatot és a fordítást. A külön
+AI-ellenőrzés Gemini-kulccsal kérhető. A közzétételhez tanári jóváhagyás kell.
+A heti csomagban szintenként végezhető el az ellenőrzés és a közzététel.
+
+Éles szerveren add meg a `PUBLISHED_QUIZ_DIR` változóban egy írható, tartós
+lemezkötet mappáját. Helyben az alapértelmezett mappa a Gitből kizárt
+`.quiz-data`. Minden publikálás önálló pillanatképet ad. Egy javított változat
+új linket kap, a korábban megosztott link ugyanarra a változatra mutat.
+A helyi mentés törlése csak a böngészőben lévő példányt érinti.
+
+A csak Vite-tal összeállított Vercel-előnézetben a beépített kvízek és a
+szintfelmérő kipróbálhatók. A kvízek közzététele és a megosztott kvízlinkek
+kiszolgálása Express szervert és tartós tárolót igényel. A jelenlegi
+fájlalapú közzététel tartós lemezkötetes, egyetlen szerverpéldányos üzemre készült.

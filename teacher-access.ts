@@ -90,5 +90,5 @@ export function registerTeacherAccess(app: Express, { password, secure }: { pass
     next();
   }
 
-  return { requireTeacher, limitGeneration, limitDownload };
+  return { requireTeacher, limitGeneration, limitDownload, limitPublish: rateLimit(10, 60_000)(1) };
 }

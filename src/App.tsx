@@ -23,6 +23,7 @@ import { WeeklyArchiveModal } from './components/WeeklyArchiveModal';
 import { TeacherStudioModal } from './components/TeacherStudioModal';
 import { DiagnosticModal } from './components/DiagnosticModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { publishedQuizId } from './utils/quizReview';
 import { ChangelogModal } from './components/ChangelogModal';
 import { MessageCircle, ExternalLink, Calendar, Users, Sparkles, BookOpen, Lock, ShieldCheck, FileText } from 'lucide-react';
 
@@ -255,7 +256,9 @@ export default function App() {
   };
 
   const handleCustomQuizCreated = (newQuiz: QuizPackage) => {
-    setPinnedWeeklyQuiz(newQuiz.level, newQuiz.id);
+    if (getPinnedWeeklyQuizzes()[newQuiz.level] !== newQuiz.id) {
+      setPinnedWeeklyQuiz(newQuiz.level, newQuiz.id);
+    }
     setPinnedQuizzes(getPinnedWeeklyQuizzes());
     setAllQuizzes(getAllQuizzes());
     handleSelectQuiz(newQuiz);
@@ -272,6 +275,50 @@ export default function App() {
     resetQuizState(defaultQuiz);
     updateUrlParams(defaultQuiz.level, defaultQuiz.id);
   };
+
+  const [sharedId] = useState(() => new URLSearchParams(window.location.search).get('quiz') ?? '');
+  const [sharedStatus, setSharedStatus] = useState<'loading' | 'error' | null>(
+    sharedId.startsWith('published-') ? 'loading' : null,
+  );
+
+  useEffect(() => {
+    if (!sharedId.startsWith('published-')) return;
+    if (!publishedQuizId.test(sharedId)) {
+      setSharedStatus('error');
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/published-quizzes/${sharedId}`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error();
+        const quiz: QuizPackage = await response.json();
+        if (quiz.id !== sharedId || !quiz.questions?.length) throw new Error();
+        if (controller.signal.aborted) return;
+        resetQuizState(quiz);
+        setCurrentLevel(quiz.level);
+        setSharedStatus(null);
+      })
+      .catch(() => { if (!controller.signal.aborted) setSharedStatus('error'); });
+    return () => controller.abort();
+  }, [sharedId]);
+
+  if (sharedStatus) {
+    return (
+      <main className="app-container py-10">
+        <div className="quiz-surface rounded-2xl p-6">
+          <h1 className="text-xl font-bold">{sharedStatus === 'loading' ? 'A megosztott kvíz betöltése…' : 'A megosztott kvíz nem érhető el'}</h1>
+          {sharedStatus === 'error' && (
+            <>
+              <p className="mt-2">Ellenőrizd a linket, vagy kérj újat a tanártól.</p>
+              <a className="mt-4 inline-block font-bold text-[#07577d] underline" href={window.location.pathname}>
+                Vissza a heti kvízekhez
+              </a>
+            </>
+          )}
+        </div>
+      </main>
+    );
+  }
 
   const currentQ = currentQuiz.questions[questionIndex] || currentQuiz.questions[0];
 
@@ -455,6 +502,7 @@ export default function App() {
         onQuizCreatedOrSelected={handleCustomQuizCreated}
         currentWeekNumber={currentWeekNumber}
         onQuizDeleted={() => setAllQuizzes(getAllQuizzes())}
+        onPublished={() => setAllQuizzes(getAllQuizzes())}
         onOpenChangelog={() => setIsChangelogOpen(true)}
       />
 

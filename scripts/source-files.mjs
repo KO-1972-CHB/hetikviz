@@ -6,6 +6,7 @@ const ROOT_FILES = [
   'package-lock.json',
   'README.md',
   'teacher-access.ts',
+  'published-quizzes.ts',
   'index.html',
   'server.ts',
   'tsconfig.json',

@@ -46,7 +46,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
 
   const handleCopyLink = (quiz: QuizPackage, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/?level=${quiz.level}&quiz=${quiz.id}`;
+    const url = `${window.location.origin}/?level=${quiz.level}&quiz=${encodeURIComponent(quiz.publishedId || quiz.id)}`;
     navigator.clipboard.writeText(url);
     setCopiedId(quiz.id);
     setTimeout(() => setCopiedId(null), 2500);
@@ -226,6 +226,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                       </>
                     )}
 
+                    {(!q.isCustom || q.publishedId) && (
                     <button
                       onClick={(e) => handleCopyLink(q, e)}
                       className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 text-xs font-semibold flex items-center space-x-1 cursor-pointer"
@@ -243,6 +244,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                         </>
                       )}
                     </button>
+                    )}
 
                     <button aria-label={`${q.title} – Kitöltés`} className="quiz-primary min-h-11 items-center gap-1 rounded-xl px-3.5 text-sm font-bold">
                       <Play className="w-3.5 h-3.5 fill-current" />
