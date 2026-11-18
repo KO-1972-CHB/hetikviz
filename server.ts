@@ -2,12 +2,12 @@ import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
-import { createSharedStore } from './shared-store';
+import { createSharedStore } from './shared-store.js';
 import fs from 'fs';
 import ZipStream from 'zip-stream';
-import { registerPublishedQuizzes } from './published-quizzes';
-import { isReviewableQuestion, reviewQuiz } from './src/utils/quizReview';
-import { registerTeacherAccess } from './teacher-access';
+import { registerPublishedQuizzes } from './published-quizzes.js';
+import { isReviewableQuestion, reviewQuiz } from './src/utils/quizReview.js';
+import { registerTeacherAccess } from './teacher-access.js';
 import { collectSourceFiles } from './scripts/source-files.mjs';
 
 dotenv.config();
@@ -30,7 +30,7 @@ const { requireTeacher, limitGeneration, limitDownload, limitPublish } = registe
 });
 registerPublishedQuizzes(app, requireTeacher, limitPublish, store);
 
-import { NYELVTAN_CURRICULUM } from './src/data/curriculum';
+import { NYELVTAN_CURRICULUM } from './src/data/curriculum.js';
 
 const aiKey = process.env.OPENAI_API_KEY?.trim();
 const aiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';

@@ -1,4 +1,4 @@
-import type { QuizPackage, QuizQuestion } from '../types';
+import type { QuizPackage, QuizQuestion } from '../types.js';
 
 export const publishedQuizId = /^published-[a-f0-9]{32}$/;
 

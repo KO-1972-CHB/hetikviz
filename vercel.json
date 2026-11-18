@@ -11,6 +11,9 @@
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/quiz-service?__quiz_api=:path*" }
+    {
+      "source": "/api/:path(.*)",
+      "destination": "/api/quiz-service?__quiz_api=:path"
+    }
   ]
 }

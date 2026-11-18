@@ -1,4 +1,4 @@
-import type { SharedStore } from './shared-store';
+import type { SharedStore } from './shared-store.js';
 import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 

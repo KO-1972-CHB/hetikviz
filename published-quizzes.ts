@@ -1,10 +1,10 @@
-import type { SharedStore } from './shared-store';
+import type { SharedStore } from './shared-store.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Express, RequestHandler } from 'express';
-import type { QuizPackage } from './src/types';
-import { publishedQuizId, reviewQuiz } from './src/utils/quizReview';
+import type { QuizPackage } from './src/types.js';
+import { publishedQuizId, reviewQuiz } from './src/utils/quizReview.js';
 
 export function registerPublishedQuizzes(app: Express, requireTeacher: RequestHandler, limitPublish: RequestHandler, store: SharedStore) {
   const directory = process.env.PUBLISHED_QUIZ_DIR ||
