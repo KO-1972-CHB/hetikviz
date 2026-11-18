@@ -30,6 +30,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
   const percent = Math.round((score / totalQuestions) * 100);
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // Confetti fires only for great performance: 80% and above (8/10, 9/10, 10/10)
     if (percent >= 80) {
       if (score === totalQuestions) {
@@ -113,15 +114,15 @@ export const QuizResult: React.FC<QuizResultProps> = ({
     : mistakeItems.map((m) => ({ ...m, isMistake: true }));
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 py-6">
-      <div className="bg-[#FAF7F2] border border-[#f1e9dc] rounded-3xl p-5 sm:p-7 shadow-sm">
+    <div className="w-full max-w-3xl mx-auto px-4 py-6">
+      <div className="quiz-surface rounded-3xl p-5 sm:p-7">
         {/* Score Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-tr from-amber-400 to-emerald-400 text-white shadow-md mb-3">
-            <Trophy className="w-8 h-8 text-slate-900" />
+        <div className="text-center mb-6 rounded-2xl bg-[#edf6fb] p-4 sm:p-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#d3eaf6] text-[#07577d] mb-3">
+            <Trophy className="w-7 h-7" />
           </div>
 
-          <div className="inline-block px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider mb-2 shadow-xs" style={{ background: '#EF5B5B', color: 'white' }}>
+          <div className="mb-2 block text-sm font-semibold text-[#07577d]">
             {quiz.weekNumber}. heti kvíz eredmény
           </div>
 
@@ -311,7 +312,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
           {/* Full Quiz Retry button with safe arrow-function execution */}
           <button
             onClick={() => onRetry()}
-            className="w-full py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm sm:text-base flex items-center justify-center space-x-2 transition shadow-sm cursor-pointer"
+            className="quiz-primary w-full py-3.5 px-4 rounded-2xl gap-2 font-bold text-sm sm:text-base"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Kvíz újratöltése (Mind a {totalQuestions} kérdés)</span>

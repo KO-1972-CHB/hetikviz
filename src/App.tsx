@@ -276,8 +276,7 @@ export default function App() {
   const currentQ = currentQuiz.questions[questionIndex] || currentQuiz.questions[0];
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans text-[#202124] antialiased selection:bg-amber-200 selection:text-slate-900">
-      {/* Header with Gyakorlatias Angol Brand Bar and Hero Gradient */}
+    <div className="min-h-screen flex flex-col antialiased">
       <Header
         currentQuiz={currentQuiz}
         currentLevel={currentLevel}
@@ -288,7 +287,6 @@ export default function App() {
         onOpenTeacherStudio={() => setIsTeacherStudioOpen(true)}
         onOpenDiagnostic={() => setIsDiagnosticOpen(true)}
         onGoHome={handleGoHome}
-        completedAttemptsCount={attempts.length}
         isAdmin={isAdmin}
         onLogoutAdmin={handleLogoutAdmin}
       />
@@ -305,29 +303,10 @@ export default function App() {
           />
         )}
 
-        {/* Weekly schedule hint banner */}
-        {!isFinished && (
-          <div className="w-full max-w-xl mx-auto px-4 pt-1 pb-1">
-            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs text-emerald-900">
-              <div className="flex items-center space-x-1.5 font-medium flex-wrap gap-y-1">
-                <span className="text-emerald-700">🗓️</span>
-                <span>
-                  <strong>Heti feladatsor ({currentQuiz.weekNumber}. hét)</strong> • 10 kérdés azonnali magyar magyarázattal
-                </span>
-                {pinnedQuizzes[currentLevel] === currentQuiz.id && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-md bg-amber-400 text-amber-950 font-black text-[10px] shadow-xs">
-                    ⭐ Heti kiemelt
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => setIsArchiveOpen(true)}
-                className="text-emerald-800 font-bold underline hover:text-emerald-950 shrink-0 ml-2 cursor-pointer"
-              >
-                További kvízek →
-              </button>
-            </div>
-          </div>
+        {!isFinished && pinnedQuizzes[currentLevel] === currentQuiz.id && (
+          <p className="mb-2 rounded-full bg-[#fff0dc] px-3 py-1 text-sm font-semibold text-[#743d1c]">
+            Heti kiemelt kvíz
+          </p>
         )}
 
         {/* Active Quiz Card or Finished Results */}
@@ -388,8 +367,8 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full bg-slate-900 text-white py-6 px-4 text-xs mt-6 border-t border-slate-800">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-400">
+      <footer className="w-full bg-[#12354a] text-white py-6 px-4 text-xs mt-6">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-[#b8d3e2]">
           <div className="flex items-center space-x-2">
             <span className="text-base">☕</span>
             <span className="font-medium text-white tracking-tight">GYAKORLATIAS ANGOL</span>
@@ -435,7 +414,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={handleLogoutAdmin}
-                  className="hover:text-rose-400 text-slate-500 text-[11px] transition cursor-pointer"
+                  className="hover:text-rose-400 text-[#b8d3e2] text-[11px] transition cursor-pointer"
                   title="Kilépés a Tanári módból (Diák nézet)"
                 >
                   (Kilépés)
@@ -444,7 +423,7 @@ export default function App() {
             ) : (
               <button
                 onClick={() => setIsAdminLoginOpen(true)}
-                className="hover:text-slate-300 transition text-slate-500 text-[11px] flex items-center space-x-1 cursor-pointer"
+                className="hover:text-slate-300 transition text-[#b8d3e2] text-[11px] flex items-center space-x-1 cursor-pointer"
                 title="Tanári belépés az AI Kvízkészítőhöz"
               >
                 <Lock className="w-3 h-3" />
