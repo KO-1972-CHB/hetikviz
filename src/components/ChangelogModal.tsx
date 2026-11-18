@@ -18,7 +18,9 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
 
   if (!isOpen) return null;
 
-  const changelogText = `📋 GYAKORLATIAS ANGOL KVÍZPLATFORM — VERZIÓKÖVETÉS & FUNKCIÓKALAUZ (v2.8)
+  const changelogText = `📋 GYAKORLATIAS ANGOL KVÍZPLATFORM — VERZIÓKÖVETÉS & FUNKCIÓKALAUZ (v4.0)
+
+4.0: Szerveroldali tanári belépés; védett kvízgenerálás és forrásexport.
 
 1. ⚡ 1-GOMBNYOMÁSOS HETI 4-ES KVÍZCSOMAG GENERÁLÁS (A1 + A2 + B1 + B2)
 - Az AI Kvízkészítőben egyetlen gombnyomással legenerálható a hét mind a 4 szintjének (A1, A2, B1, B2) 10-10 kérdéses feladatsora!
@@ -130,7 +132,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
                   Rendszerverzió & Funkciókalauz
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  v2.8
+                  v4.0
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-normal">

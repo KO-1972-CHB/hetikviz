@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, X, Check, KeyRound, Sparkles } from 'lucide-react';
+import { X, KeyRound, Sparkles } from 'lucide-react';
 
 interface AdminLoginModalProps {
   isOpen: boolean;
@@ -13,21 +13,34 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onSuccess,
 }) => {
   const [passcode, setPasscode] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = passcode.trim().toLowerCase();
-    // Accepted passwords: 'tanar', 'admin', 'gyakorlatias'
-    if (clean === 'tanar' || clean === 'admin' || clean === 'gyakorlatias') {
+    if (submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/teacher/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passcode }),
+      });
+      const session = await response.json();
+      if (!response.ok || !session.authenticated) {
+        setError(session.error || 'A belépés sikertelen.');
+        return;
+      }
       onSuccess();
       onClose();
+    } catch {
+      setError('A belépés sikertelen. Ellenőrizd a kapcsolatot!');
+    } finally {
       setPasscode('');
-      setError(false);
-    } else {
-      setError(true);
+      setSubmitting(false);
     }
   };
 
@@ -45,7 +58,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => { setPasscode(''); setError(''); onClose(); }}
+            disabled={submitting}
             className="p-1.5 text-slate-400 hover:text-slate-700 rounded-full"
           >
             <X className="w-4 h-4" />
@@ -58,33 +72,37 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </p>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            <label htmlFor="teacher-password" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
               Tanári jelszó
             </label>
             <input
+              id="teacher-password"
               type="password"
+              autoComplete="current-password"
+              disabled={submitting}
               placeholder="Írd be a jelszót..."
               value={passcode}
               onChange={(e) => {
                 setPasscode(e.target.value);
-                setError(false);
+                setError('');
               }}
               autoFocus
               className="w-full py-2.5 px-3 rounded-xl border border-slate-300 text-sm focus:outline-emerald-500 font-semibold"
             />
             {error && (
-              <span className="text-xs text-rose-600 font-bold block mt-1">
-                Hibás tanári jelszó! Kérlek ellenőrizd a megadott kódot.
+              <span role="alert" className="text-xs text-rose-600 font-bold block mt-1">
+                {error}
               </span>
             )}
           </div>
 
           <button
             type="submit"
+            disabled={submitting || !passcode}
             className="w-full py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm flex items-center justify-center space-x-2 transition shadow-sm cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Belépés Tanári Módba</span>
+            <span>{submitting ? 'Belépés…' : 'Belépés Tanári Módba'}</span>
           </button>
         </form>
       </div>

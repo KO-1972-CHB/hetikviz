@@ -29,39 +29,36 @@ import { MessageCircle, ExternalLink, Calendar, Users, Sparkles, BookOpen, Lock,
 export default function App() {
   const currentWeekNumber = useMemo(() => getCurrentWeekNumber(), []);
 
-  // Teacher / Admin mode state: enabled via URL param (?admin=true or ?tanar=1) or stored in localStorage
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('admin') === 'true' || params.get('tanar') === '1' || params.get('teacher') === '1') {
-        localStorage.setItem('gyakorlatias_admin_mode', 'true');
-        return true;
-      }
-      return localStorage.getItem('gyakorlatias_admin_mode') === 'true';
-    }
-    return false;
-  });
-
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/teacher/session', { signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(session => {
+        if (!controller.signal.aborted && session?.authenticated) setIsAdmin(true);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   const handleLoginSuccess = () => {
     setIsAdmin(true);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gyakorlatias_admin_mode', 'true');
-    }
     setIsTeacherStudioOpen(true);
   };
 
-  const handleLogoutAdmin = () => {
-    setIsAdmin(false);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('gyakorlatias_admin_mode');
-      const params = new URLSearchParams(window.location.search);
-      params.delete('admin');
-      params.delete('tanar');
-      params.delete('teacher');
-      const newSearch = params.toString() ? `?${params.toString()}` : window.location.pathname;
-      window.history.replaceState(null, '', newSearch);
+  const handleLogoutAdmin = async () => {
+    try {
+      const response = await fetch('/api/teacher/session', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error();
+      setIsAdmin(false);
+      setIsTeacherStudioOpen(false);
+    } catch {
+      window.alert('A kijelentkezés sikertelen. Próbáld újra!');
     }
   };
 
@@ -424,7 +421,7 @@ export default function App() {
               title="Rendszerverzió és funkciókalauz megtekintése"
             >
               <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span>v2.8 Verziókövetés</span>
+              <span>v4.0 Verziókövetés</span>
             </button>
 
             {isAdmin ? (
@@ -474,7 +471,7 @@ export default function App() {
       />
 
       <TeacherStudioModal
-        isOpen={isTeacherStudioOpen}
+        isOpen={isAdmin && isTeacherStudioOpen}
         onClose={() => setIsTeacherStudioOpen(false)}
         onQuizCreatedOrSelected={handleCustomQuizCreated}
         currentWeekNumber={currentWeekNumber}

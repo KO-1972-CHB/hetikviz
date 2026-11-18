@@ -4,7 +4,9 @@ import { GoogleGenAI, Type } from '@google/genai';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { ZipArchive } from 'archiver';
+import ZipStream from 'zip-stream';
+import { registerTeacherAccess } from './teacher-access';
+import { collectSourceFiles } from './scripts/source-files.mjs';
 
 dotenv.config();
 
@@ -14,17 +16,23 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '16kb' }));
+const isDev = path.extname(__filename) === '.ts' && process.env.NODE_ENV !== 'production';
+const { requireTeacher, limitGeneration, limitDownload } = registerTeacherAccess(app, {
+  password: process.env.TEACHER_PASSWORD,
+  secure: process.env.NODE_ENV === 'production',
+});
 
 // Initialize Gemini SDK with User-Agent header as required
-const ai = new GoogleGenAI({
+const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
     },
   },
-});
+}) : null;
 
 import { NYELVTAN_CURRICULUM } from './src/data/curriculum';
 
@@ -79,6 +87,7 @@ function cleanErrorMessage(error: any): string {
 
 // Robust generator with automatic exponential backoff and model fallback cascade
 async function callGeminiWithFallback(prompt: string, config: any): Promise<string> {
+  if (!ai) throw new Error('Az AI-generálás még nincs beállítva.');
   let lastError: any = null;
 
   for (let m = 0; m < GEMINI_MODELS.length; m++) {
@@ -192,24 +201,34 @@ Követelmények:
 }
 
 // Endpoint: Single 10-Question Quiz Generator
-app.post('/api/generate-quiz', async (req, res) => {
+app.post('/api/generate-quiz', requireTeacher, limitGeneration(), async (req, res) => {
   try {
     const { level = 'A2', topic = 'Gyakorlatias nyelvtani teszt', count = 10 } = req.body;
+    if (!['A1', 'A2', 'B1', 'B2'].includes(level) ||
+        typeof topic !== 'string' || !topic.trim() || topic.length > 300 ||
+        !Number.isInteger(count) || count < 1 || count > 10) {
+      return res.status(400).json({ success: false, error: 'Érvénytelen szint, téma vagy kérdésszám.' });
+    }
+    if (!ai) return res.status(503).json({ success: false, error: 'Az AI-generálás még nincs beállítva.' });
     const data = await generateQuizData(level, topic, count);
     return res.json({ success: true, data });
   } catch (error: any) {
     console.error('Error generating quiz:', error);
     return res.status(500).json({
       success: false,
-      error: cleanErrorMessage(error),
+      error: 'Az AI-generálás sikertelen. Próbáld újra később.',
     });
   }
 });
 
 // Endpoint: 1-Click Multi-Level Weekly Bundle Generator (A1 + A2 + B1 + B2)
-app.post('/api/generate-weekly-bundle', async (req, res) => {
+app.post('/api/generate-weekly-bundle', requireTeacher, limitGeneration(4), async (req, res) => {
   try {
     const { weekNumber = 46 } = req.body;
+    if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > 53) {
+      return res.status(400).json({ success: false, error: 'A hét száma 1 és 53 közötti egész szám legyen.' });
+    }
+    if (!ai) return res.status(503).json({ success: false, error: 'Az AI-generálás még nincs beállítva.' });
     const levels = ['A1', 'A2', 'B1', 'B2'] as const;
 
     // Pick a random curriculum topic for each level from the 100-point curriculum
@@ -250,7 +269,7 @@ app.post('/api/generate-weekly-bundle', async (req, res) => {
     console.error('Error generating weekly bundle:', error);
     return res.status(500).json({
       success: false,
-      error: cleanErrorMessage(error),
+      error: 'Az AI-generálás sikertelen. Próbáld újra később.',
     });
   }
 });
@@ -261,107 +280,17 @@ interface SourceFileEntry {
   size: number;
 }
 
-const ROOT_SOURCE_FILES = [
-  'package.json',
-  'index.html',
-  'server.ts',
-  'tsconfig.json',
-  'vite.config.ts',
-  'metadata.json',
-  '.env.example',
-  '.gitignore',
-];
-
-function getProjectRootPath(): string | null {
-  const candidates = [
-    process.cwd(),
-    __dirname,
-    path.resolve(__dirname, '..'),
-  ];
-  for (const c of candidates) {
-    if (
-      fs.existsSync(path.join(c, 'package.json')) &&
-      fs.existsSync(path.join(c, 'src', 'App.tsx'))
-    ) {
-      return c;
-    }
-  }
-  return null;
-}
-
-function walkSourceDir(dirPath: string, baseDir: string, collected: SourceFileEntry[]) {
-  if (!fs.existsSync(dirPath)) return;
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  entries.sort((a, b) => a.name.localeCompare(b.name));
-
-  for (const entry of entries) {
-    if (['node_modules', 'dist', '.git', '.env', '.DS_Store'].includes(entry.name)) {
-      continue;
-    }
-    const fullPath = path.join(dirPath, entry.name);
-    const relPath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
-
-    if (entry.isDirectory()) {
-      walkSourceDir(fullPath, baseDir, collected);
-    } else if (entry.isFile()) {
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      collected.push({
-        path: relPath,
-        content,
-        size: Buffer.byteLength(content, 'utf-8'),
-      });
-    }
-  }
-}
-
 function getAllProjectSourceFiles(): SourceFileEntry[] {
-  const projectRoot = getProjectRootPath();
+  if (isDev) return collectSourceFiles(__dirname);
 
-  if (projectRoot) {
-    const files: SourceFileEntry[] = [];
-    for (const fileName of ROOT_SOURCE_FILES) {
-      const fullPath = path.join(projectRoot, fileName);
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        files.push({
-          path: fileName,
-          content,
-          size: Buffer.byteLength(content, 'utf-8'),
-        });
-      }
-    }
-    walkSourceDir(path.join(projectRoot, 'src'), projectRoot, files);
-    walkSourceDir(path.join(projectRoot, 'scripts'), projectRoot, files);
-    if (files.length > 0) {
-      return files;
-    }
-  }
-
-  // Fallback for stripped production environments: read bundled source snapshot
-  const snapshotCandidates = [
-    path.resolve(__dirname, 'source-snapshot.json'),
-    path.resolve(__dirname, 'dist', 'source-snapshot.json'),
-    path.resolve(process.cwd(), 'dist', 'source-snapshot.json'),
-  ];
-  for (const snapPath of snapshotCandidates) {
-    if (fs.existsSync(snapPath)) {
-      try {
-        const raw = fs.readFileSync(snapPath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed?.files)) {
-          return parsed.files;
-        }
-      } catch (err) {
-        console.error('Error reading source snapshot:', err);
-      }
-    }
-  }
-
-  return [];
+  const snapshotPath = path.join(__dirname, 'source-snapshot.json');
+  if (!fs.existsSync(snapshotPath)) return [];
+  const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+  return Array.isArray(snapshot?.files) ? snapshot.files : [];
 }
 
 // Endpoint: Return project source files & contents for Teacher Mode Source Viewer
-app.get('/api/source-files', (_req, res) => {
+app.get('/api/source-files', requireTeacher, limitDownload, (_req, res) => {
   try {
     const files = getAllProjectSourceFiles();
     return res.json({
@@ -379,65 +308,40 @@ app.get('/api/source-files', (_req, res) => {
 });
 
 // Endpoint: Download clean project source code as a ZIP archive (for Teacher mode)
-app.get('/api/download-source-zip', async (_req, res) => {
+app.get('/api/download-source-zip', requireTeacher, limitDownload, async (_req, res) => {
   try {
     const files = getAllProjectSourceFiles();
     if (files.length === 0) {
       return res.status(404).json({ error: 'Nem találhatók a forrásfájlok.' });
     }
 
-    const archive = new ZipArchive({
-      zlib: { level: 9 },
-    });
-
+    const archive = new ZipStream();
     const today = new Date().toISOString().slice(0, 10);
-    const filename = `gyakorlatias-angol-source-${today}.zip`;
-
-    res.attachment(filename);
-    res.setHeader('Content-Type', 'application/zip');
-
-    archive.on('error', (err: any) => {
-      console.error('Archiver error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Archiving failed' });
-      }
-    });
-
+    res.attachment(`gyakorlatias-angol-source-${today}.zip`);
+    res.on('close', () => archive.destroy());
+    archive.on('error', error => res.destroy(error));
     archive.pipe(res);
 
     for (const file of files) {
-      archive.append(file.content, { name: file.path });
+      if (archive.destroyed) return;
+      await new Promise<void>((resolve, reject) => {
+        archive.entry(file.content, { name: file.path }, error => error ? reject(error) : resolve());
+      });
     }
-
-    await archive.finalize();
+    archive.finalize();
   } catch (error: any) {
     console.error('Zip download error:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Nem sikerült létrehozni a ZIP archívumot.' });
+      res.removeHeader('Content-Disposition');
+      res.type('application/json').status(500).json({ error: 'Nem sikerült létrehozni a ZIP archívumot.' });
+    } else {
+      res.destroy(error);
     }
   }
 });
 
-// Helper to find the client dist folder containing index.html in any execution environment
-function getClientDistPath(): string | null {
-  const candidates = [
-    path.resolve(__dirname, 'dist'),
-    path.resolve(process.cwd(), 'dist'),
-    path.resolve(__dirname),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(path.join(c, 'index.html'))) {
-      return c;
-    }
-  }
-  return null;
-}
-
-// Setup Vite middleware in dev or static files in production
 async function startServer() {
-  const clientDist = getClientDistPath();
-  const isDev = process.env.NODE_ENV === 'development' || (!clientDist && process.env.NODE_ENV !== 'production');
-
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Ismeretlen művelet.' }));
   if (isDev) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -445,22 +349,19 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else if (clientDist) {
-    app.use(express.static(clientDist));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(clientDist, 'index.html'));
-    });
   } else {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+    const index = path.join(__dirname, 'index.html');
+    if (!fs.existsSync(index) || path.extname(__filename) === '.ts') {
+      throw new Error('Futtasd az npm run build parancsot az indítás előtt.');
+    }
+    app.get(['/server.js', '/source-snapshot.json'], (_req, res) => res.sendStatus(404));
+    app.use('/assets', express.static(path.join(__dirname, 'assets'), { fallthrough: false }));
+    app.get('*', (_req, res) => res.sendFile(index));
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Gyakorlatias Angol server running at http://localhost:${PORT}`);
+  const host = process.env.HOST || (isDev ? '127.0.0.1' : '0.0.0.0');
+  app.listen(PORT, host, () => {
+    console.log(`Gyakorlatias Angol server running at http://${host}:${PORT}`);
   });
 }
 
