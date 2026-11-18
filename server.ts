@@ -35,19 +35,70 @@ import { NYELVTAN_CURRICULUM } from './src/data/curriculum.js';
 const aiKey = process.env.OPENAI_API_KEY?.trim();
 const aiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
 
-async function requestAiJson(name: string, prompt: string, instructions: string, schema: object) {
+class AiServiceError extends Error {
+  constructor(
+    readonly publicMessage: string,
+    readonly diagnostic: string,
+    readonly status = 502,
+  ) {
+    super(diagnostic);
+  }
+}
+
+function aiErrorResponse(error: unknown, fallback: string) {
+  if (error instanceof AiServiceError) {
+    console.error('OpenAI request failed:', error.diagnostic);
+    return { status: error.status, message: error.publicMessage };
+  }
+  console.error('AI operation failed:', error instanceof Error ? error.name : 'unknown error');
+  return { status: 502, message: fallback };
+}
+
+async function rejectAiResponse(response: Response): Promise<never> {
+  const payload = await response.json().catch(() => null);
+  const safeLabel = (value: unknown) =>
+    typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value) ? value : null;
+  const code = safeLabel(payload?.error?.code);
+  const type = safeLabel(payload?.error?.type);
+  const requestId = safeLabel(response.headers.get('x-request-id'));
+  const diagnostic = [`HTTP ${response.status}`, code, type, requestId].filter(Boolean).join(' / ');
+
+  if (response.status === 401) {
+    throw new AiServiceError('Az OpenAI elutasította az API-kulcsot. Ellenőrizd a Preview környezet OPENAI_API_KEY változóját.', diagnostic);
+  }
+  if (code === 'insufficient_quota' || type === 'insufficient_quota' || code === 'billing_hard_limit_reached') {
+    throw new AiServiceError('Az OpenAI API-kerete elfogyott vagy a számlázás még nincs beállítva. Ellenőrizd az OpenAI Platform számlázását és a projekt költési keretét.', diagnostic, 503);
+  }
+  if (response.status === 403 || response.status === 404 || code === 'model_not_found') {
+    throw new AiServiceError('Az OpenAI-kulcs vagy a hozzá tartozó projekt nem fér hozzá a kért modellhez. Ellenőrizd a projekt jogosultságait és az OPENAI_MODEL beállítást.', diagnostic);
+  }
+  if (response.status === 429) {
+    throw new AiServiceError('Az OpenAI túl sok kérést kapott. Várj egy kicsit, és próbáld újra.', diagnostic, 503);
+  }
+  if (response.status === 400) {
+    throw new AiServiceError('Az OpenAI nem fogadta el a kérést. Ellenőrizd, hogy a kiválasztott modell támogatja-e a strukturált JSON-válaszokat.', diagnostic);
+  }
+  throw new AiServiceError('Az OpenAI átmenetileg nem elérhető. Próbáld újra később.', diagnostic, 503);
+}
+
+async function requestAiJson(name: string, prompt: string, instructions: string, schema: object, timeoutMs = 55_000) {
   if (!aiKey) throw new Error('Az AI-szolgáltató még nincs beállítva.');
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${aiKey}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeoutMs),
     body: JSON.stringify({
       model: aiModel,
       messages: [{ role: 'system', content: instructions }, { role: 'user', content: prompt }],
       response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
     }),
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new AiServiceError('Az OpenAI válasza túl sokáig tartott. Próbáld újra, vagy készíts egyszerre egy kvízt.', 'request timeout', 504);
+    }
+    throw new AiServiceError('A szerver nem éri el az OpenAI API-t. Próbáld újra később.', 'connection failed', 503);
   });
-  if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}`);
+  if (!response.ok) return rejectAiResponse(response);
   const reply = await response.json();
   const message = reply.choices?.[0]?.message;
   if (reply.choices?.[0]?.finish_reason !== 'stop' || message?.refusal || typeof message?.content !== 'string') {
@@ -57,7 +108,7 @@ async function requestAiJson(name: string, prompt: string, instructions: string,
 }
 
 // Helper: Generates a 10-question quiz for a given CEFR level and grammar topic
-async function generateQuizData(level: string, topic: string, count = 10) {
+async function generateQuizData(level: string, topic: string, count = 10, timeoutMs?: number) {
   const prompt = `Készíts egy ${count} kérdésből álló, kiváló minőségű feleletválasztós angol nyelvtani és szókincs kvízt a Gyakorlatias Angol közösség számára.
 Célcsoport szintje: CEFR ${level} (pl. A1 Kezdő, A2 Alapfok, B1 Középhaladó, B2 Haladó).
 Téma / fókusz: "${topic}".
@@ -106,7 +157,7 @@ Követelmények:
     },
   };
 
-  const parsed = await requestAiJson('weekly_quiz', prompt, config.systemInstruction, config.responseSchema);
+  const parsed = await requestAiJson('weekly_quiz', prompt, config.systemInstruction, config.responseSchema, timeoutMs);
   if (!Array.isArray(parsed?.questions) || parsed.questions.length !== count) {
     throw new Error('The generator returned an unexpected number of questions');
   }
@@ -188,8 +239,8 @@ app.post('/api/review-quiz', requireTeacher, limitGeneration(), async (req, res)
       note: row.note,
     })) });
   } catch (error) {
-    console.error('Quiz review failed:', error);
-    return res.status(502).json({ error: 'Az AI-ellenőrzés sikertelen. A kérdések kézzel is átnézhetők.' });
+    const failure = aiErrorResponse(error, 'Az AI-ellenőrzés sikertelen. A kérdések kézzel is átnézhetők.');
+    return res.status(failure.status).json({ error: failure.message });
   }
 });
 
@@ -205,12 +256,9 @@ app.post('/api/generate-quiz', requireTeacher, limitGeneration(), async (req, re
     if (!aiKey) return res.status(503).json({ success: false, error: 'Az AI-generálás még nincs beállítva.' });
     const data = await generateQuizData(level, topic, count);
     return res.json({ success: true, data });
-  } catch (error: any) {
-    console.error('Error generating quiz:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Az AI-generálás sikertelen. Próbáld újra később.',
-    });
+  } catch (error) {
+    const failure = aiErrorResponse(error, 'Az AI-generálás sikertelen. Próbáld újra később.');
+    return res.status(failure.status).json({ success: false, error: failure.message });
   }
 });
 
@@ -239,7 +287,7 @@ app.post('/api/generate-weekly-bundle', requireTeacher, limitGeneration(4), asyn
     const results = [];
     for (let i = 0; i < topicAssignments.length; i++) {
       const t = topicAssignments[i];
-      const data = await generateQuizData(t.level, t.topic, 10);
+      const data = await generateQuizData(t.level, t.topic, 10, 30_000);
       results.push({
         level: t.level,
         topic: t.topic,
@@ -258,12 +306,9 @@ app.post('/api/generate-weekly-bundle', requireTeacher, limitGeneration(4), asyn
       weekNumber: Number(weekNumber) || 46,
       quizzes: results,
     });
-  } catch (error: any) {
-    console.error('Error generating weekly bundle:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Az AI-generálás sikertelen. Próbáld újra később.',
-    });
+  } catch (error) {
+    const failure = aiErrorResponse(error, 'Az AI-generálás sikertelen. Próbáld újra később.');
+    return res.status(failure.status).json({ success: false, error: failure.message });
   }
 });
 
