@@ -58,12 +58,13 @@ felületet és az Express API-t. Külön tesztprojekthez a `v4.0-preview` ágró
 indíts Preview telepítést. Node.js 22.x ajánlott. A repó
 `npm ci`, `npx vite build` és `dist` beállításait használd.
 
-1. A Vercel Marketplace-ben adj Upstash Redis adatbázist a tesztprojekthez.
+1. A Vercel Marketplace-ben adj Redis adatbázist a tesztprojekthez.
    A **Settings → Environment Variables** részen ellenőrizd, hogy a
-   **Preview** környezet megkapta az `UPSTASH_REDIS_REST_URL` és
-   `UPSTASH_REDIS_REST_TOKEN` változókat. Írásra jogosító, szerveroldali
-   token kell. A Redisben vannak a tanári munkamenetek, a kéréskorlátok és
-   a közzétett kvízek.
+   **Preview** környezetben szerepel a `KV_REST_API_URL` és a
+   `KV_REST_API_TOKEN`. Kézi Upstash-bekötéshez az
+   `UPSTASH_REDIS_REST_URL` és `UPSTASH_REDIS_REST_TOKEN` páros is
+   használható. A tokennek írási jogosultságra van szüksége. A Redisben
+   vannak a tanári munkamenetek, a kéréskorlátok és a közzétett kvízek.
 2. Ugyanebben a környezetben a `TEACHER_PASSWORD` értéke legyen egyedi,
    legalább 16 karakteres jelszó. Az AI-kvízkészítéshez és ellenőrzéshez
    kell az `OPENAI_API_KEY`. A titkos változók neve ne kezdődjön

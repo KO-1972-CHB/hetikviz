@@ -1,8 +1,11 @@
 type RedisArgument = string | number;
 
 export function createSharedStore() {
-  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const [url, token] = upstashUrl && upstashToken
+    ? [upstashUrl, upstashToken]
+    : [process.env.KV_REST_API_URL?.trim(), process.env.KV_REST_API_TOKEN?.trim()];
   if (!url || !token) return null;
   const endpoint = new URL(url);
   if (endpoint.protocol !== 'https:') throw new Error('Redis REST must use HTTPS');
