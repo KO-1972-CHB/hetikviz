@@ -1,6 +1,6 @@
 import React from 'react';
 import { CefrLevel, QuizPackage } from '../types';
-import { Calendar, Sparkles, HelpCircle, BookOpen } from 'lucide-react';
+import { Calendar, Sparkles, HelpCircle, BookOpen, Bookmark } from 'lucide-react';
 
 interface HeaderProps {
   currentQuiz: QuizPackage;
@@ -8,6 +8,7 @@ interface HeaderProps {
   questionIndex: number;
   totalQuestions: number;
   score: number;
+  onOpenPractice: () => void;
   onOpenArchive: () => void;
   onOpenTeacherStudio: () => void;
   onOpenDiagnostic: () => void;
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   questionIndex,
   totalQuestions,
   score,
+  onOpenPractice,
   onOpenArchive,
   onOpenTeacherStudio,
   onOpenDiagnostic,
@@ -50,6 +52,9 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
             <button onClick={onOpenDiagnostic} className="quiz-nav-button">
               <HelpCircle aria-hidden="true" size={17} /> Szintfelmérő
+            </button>
+            <button onClick={onOpenPractice} className="quiz-nav-button">
+              <Bookmark aria-hidden="true" size={17} /> Saját gyakorlás
             </button>
             {isAdmin && (
               <>

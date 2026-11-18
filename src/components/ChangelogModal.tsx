@@ -82,7 +82,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({
     },
     {
       icon: <Sparkles className="w-5 h-5 text-amber-400" />,
-      title: 'AI Kvízkészítő (Gemini 3.8 Flash)',
+      title: 'AI Kvízkészítő (OpenAI)',
       desc: '1 kattintással generál 10 kérdéses heti csomagokat részletes magyar magyarázatokkal, fordításokkal és 1 kattintásos Facebook bejelentő poszttal.',
     },
     {

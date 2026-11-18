@@ -9,8 +9,8 @@ A kiadáshoz futtasd az `npm run build`, majd az `npm start` parancsot.
 Az alkalmazás alapértelmezett portja 3000.
 
 A tanári belépéshez a szerveren állíts be egy egyedi, legalább 16 karakteres
-`TEACHER_PASSWORD` jelszót. Az AI-generáláshoz `GEMINI_API_KEY` is kell.
-Helyben a Gitből kizárt `.env` fájl használható. Élesben az üzemeltető
+`TEACHER_PASSWORD` jelszót. Az AI-generáláshoz `OPENAI_API_KEY` is kell.
+Az opcionális `OPENAI_MODEL` alapértéke `gpt-4.1-mini`. Helyben a Gitből kizárt `.env` fájl használható. Élesben az üzemeltető
 titoktárolóját, HTTPS-t és `NODE_ENV=production` beállítást használd.
 
 A tanári munkamenet nyolc óráig tart, és a szerver újraindításakor megszűnik.
@@ -34,7 +34,7 @@ csomag négy generálásnak számít.
 A Tanári Stúdióban a generált kvíz tervezetként jelenik meg. A kérdések
 szerkeszthetők, az alkalmazás ellenőrzi a kérdésszámot, a feladatformát,
 a megoldókulcsot, az ismétlődéseket, a magyarázatot és a fordítást. A külön
-AI-ellenőrzés Gemini-kulccsal kérhető. A közzétételhez tanári jóváhagyás kell.
+AI-ellenőrzés OpenAI-kulccsal kérhető. A közzétételhez tanári jóváhagyás kell.
 A heti csomagban szintenként végezhető el az ellenőrzés és a közzététel.
 
 Éles szerveren add meg a `PUBLISHED_QUIZ_DIR` változóban egy írható, tartós
@@ -47,3 +47,25 @@ A csak Vite-tal összeállított Vercel-előnézetben a beépített kvízek és 
 szintfelmérő kipróbálhatók. A kvízek közzététele és a megosztott kvízlinkek
 kiszolgálása Express szervert és tartós tárolót igényel. A jelenlegi
 fájlalapú közzététel tartós lemezkötetes, egyetlen szerverpéldányos üzemre készült.
+
+
+## Saját gyakorlás
+
+A heti kvíz eredményoldalán a „Mentés gyakorláshoz” művelettel jelölheted
+meg a kérdéseket. A fejléc „Saját gyakorlás” nézetében szint és témakör
+szerint szűrhetsz, és elindíthatod a kijelölt kérdések gyakorlását.
+A mentések az adott böngészőben és webcímen maradnak.
+
+## Tanári belépés a Vercelen
+
+Ha már fut az Express API, a Vercel projekt **Settings → Environment
+Variables** felületén a `TEACHER_PASSWORD` értéke legyen az egyedi, legalább
+16 karakteres tanári jelszó. Válaszd ki a megfelelő környezetet
+(`Preview` a tesztoldalhoz), majd indíts új telepítést. A jelszót ne tedd
+`VITE_` kezdetű változóba, mert azok a böngészőcsomag részei lehetnek.
+
+A csak `npx vite build` paranccsal kiadott oldalhoz nem tartozik Express
+API. A tanári belépéshez és a kvízek közzétételéhez szerveroldali telepítés
+kell. Több Vercel-példány esetén a munkamenetekhez és a korlátokhoz közös
+tároló szükséges. A külön, tartós lemezkötetes Express-szerver a jelenlegi
+tárolási kódot közvetlenül tudja használni.

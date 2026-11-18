@@ -226,7 +226,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </button>
         )}
 
-        <div className="mt-5 flex items-center justify-center space-x-2">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           {Array.from({ length: totalQuestions }).map((_, idx) => {
             const isPast = idx < answersHistory.length;
             const wasCorrect = isPast ? answersHistory[idx] : null;

@@ -420,7 +420,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     </h3>
 
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Egyetlen kattintásra a Gemini AI mind a 4 szintre kiválaszt egy véletlenszerű tantervi témát, és legenerálja a heti 10-10 kérdéses feladatsort magyar magyarázatokkal!
+                      Egyetlen kattintásra a AI mind a 4 szintre kiválaszt egy véletlenszerű tantervi témát, és legenerálja a heti 10-10 kérdéses feladatsort magyar magyarázatokkal!
                     </p>
                   </div>
 
@@ -447,7 +447,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 {isGeneratingBundle && (
                   <div className="p-3 bg-white/90 rounded-xl border border-emerald-200 text-xs space-y-2 animate-in fade-in">
                     <div className="flex items-center justify-between font-bold text-slate-800 text-[11px]">
-                      <span>Gemini AI dolgozik mind a 4 szinten (automatikus terhelésvédelemmel)...</span>
+                      <span>AI dolgozik mind a 4 szinten (automatikus terhelésvédelemmel)...</span>
                       <span className="text-emerald-700">Folyamatban</span>
                     </div>
                     <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-extrabold">
@@ -626,7 +626,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   {isLoading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-slate-900" />
-                      <span>10 kérdéses kvíz generálása Gemini AI-val...</span>
+                      <span>10 kérdéses kvíz generálása AI-val...</span>
                     </>
                   ) : (
                     <>

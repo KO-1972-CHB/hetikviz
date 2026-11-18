@@ -29,7 +29,11 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passcode }),
       });
-      const session = await response.json();
+      const session = await response.json().catch(() => null);
+      if (!session) {
+        setError('A tanári belépéshez a szervert is be kell kötni.');
+        return;
+      }
       if (!response.ok || !session.authenticated) {
         setError(session.error || 'A belépés sikertelen.');
         return;

@@ -15,6 +15,8 @@ import {
   setPinnedWeeklyQuiz,
   getActiveWeeklyQuizForLevel,
 } from './utils/quizUtils';
+import { SavedPracticeModal } from './components/SavedPracticeModal';
+import { readSavedQuestions, savedQuestion, setQuestionSaved, type SavedQuestion } from './utils/savedPractice';
 import { Header } from './components/Header';
 import { LevelSelector } from './components/LevelSelector';
 import { QuizCard } from './components/QuizCard';
@@ -109,6 +111,24 @@ export default function App() {
   const [selectedAnswersHistory, setSelectedAnswersHistory] = useState<(number | null)[]>([]);
   const [isFinished, setIsFinished] = useState(false);
 
+  const [practiceOpen, setPracticeOpen] = useState(false);
+  const [practiceError, setPracticeError] = useState('');
+  const [savedQuestions, setSavedQuestions] = useState(readSavedQuestions);
+  const [practiceSources, setPracticeSources] = useState<SavedQuestion[]>([]);
+
+  function changeSaved(item: SavedQuestion, shouldSave: boolean) {
+    try {
+      setSavedQuestions(setQuestionSaved(item, shouldSave));
+      setPracticeError('');
+    } catch {
+      setPracticeError('A böngésző nem tudta módosítani a mentett kérdéseket.');
+    }
+  }
+
+  function practiceItem(question: QuizPackage['questions'][number]) {
+    return practiceSources.find(item => item.question.id === question.id) || savedQuestion(currentQuiz, question);
+  }
+
   // Modals state
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isTeacherStudioOpen, setIsTeacherStudioOpen] = useState(false);
@@ -178,6 +198,23 @@ export default function App() {
     setIsFinished(false);
   };
 
+  function startSavedPractice(items: SavedQuestion[]) {
+    if (!items.length) return;
+    const now = new Date();
+    const sources = items.map((item, index) => ({
+      ...item, question: { ...item.question, id: `saved-${index}` },
+    }));
+    setPracticeSources(sources);
+    setCurrentLevel(items[0].level);
+    setPracticeOpen(false);
+    window.history.replaceState(null, '', window.location.pathname);
+    resetQuizState({
+      id: 'saved-practice', title: 'Saját gyakorlás', subtitle: 'Elmentett kérdéseid',
+      level: items[0].level, weekNumber: currentWeekNumber, year: now.getFullYear(),
+      topic: items[0].topic, questions: sources.map(item => item.question),
+    });
+  }
+
   // Practice only the mistaken questions
   const handleRetryMistakes = (mistakeQuestions: QuizPackage['questions']) => {
     if (mistakeQuestions.length === 0) return;
@@ -205,6 +242,7 @@ export default function App() {
 
   // Handle Level Selection
   const handleSelectLevel = (lvl: CefrLevel) => {
+    setPracticeSources([]);
     setCurrentLevel(lvl);
     const match = getActiveWeeklyQuizForLevel(lvl, allQuizzes) || allQuizzes[0];
     resetQuizState(match);
@@ -213,6 +251,7 @@ export default function App() {
 
   // Handle Specific Quiz Selection
   const handleSelectQuiz = (quiz: QuizPackage) => {
+    setPracticeSources([]);
     setCurrentLevel(quiz.level);
     resetQuizState(quiz);
     updateUrlParams(quiz.level, quiz.id);
@@ -250,8 +289,10 @@ export default function App() {
         totalQuestions: currentQuiz.questions.length,
         selectedAnswers: newSelectedHistory.map((s) => s ?? -1),
       };
-      saveAttempt(attempt);
-      setAttempts(getStoredAttempts());
+      if (!currentQuiz.id.startsWith('saved-practice')) {
+        saveAttempt(attempt);
+        setAttempts(getStoredAttempts());
+      }
     }
   };
 
@@ -266,6 +307,8 @@ export default function App() {
 
   // Navigates directly back to the active weekly quiz base view
   const handleGoHome = () => {
+    setPracticeSources([]);
+    setPracticeOpen(false);
     setIsArchiveOpen(false);
     setIsTeacherStudioOpen(false);
     setIsDiagnosticOpen(false);
@@ -330,6 +373,7 @@ export default function App() {
         questionIndex={questionIndex}
         totalQuestions={currentQuiz.questions.length}
         score={score}
+        onOpenPractice={() => { setSavedQuestions(readSavedQuestions()); setPracticeError(''); setPracticeOpen(true); }}
         onOpenArchive={() => setIsArchiveOpen(true)}
         onOpenTeacherStudio={() => setIsTeacherStudioOpen(true)}
         onOpenDiagnostic={() => setIsDiagnosticOpen(true)}
@@ -375,6 +419,12 @@ export default function App() {
             selectedAnswers={selectedAnswersHistory}
             onRetry={() => resetQuizState()}
             onRetryMistakes={handleRetryMistakes}
+            isSaved={q => savedQuestions.some(item => item.key === practiceItem(q).key)}
+            onToggleSaved={q => {
+              const item = practiceItem(q);
+              changeSaved(item, !savedQuestions.some(saved => saved.key === item.key));
+            }}
+            saveError={practiceError}
             onSelectAnotherLevel={() => {
               resetQuizState();
               setIsDiagnosticOpen(true);
@@ -505,6 +555,15 @@ export default function App() {
         onPublished={() => setAllQuizzes(getAllQuizzes())}
         onOpenChangelog={() => setIsChangelogOpen(true)}
       />
+
+      {practiceOpen && (
+        <SavedPracticeModal
+          questions={savedQuestions} error={practiceError}
+          onClose={() => setPracticeOpen(false)}
+          onRemove={item => changeSaved(item, false)}
+          onPractice={startSavedPractice}
+        />
+      )}
 
       <DiagnosticModal
         isOpen={isDiagnosticOpen}

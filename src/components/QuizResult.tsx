@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { QuizPackage, QuizQuestion } from '../types';
 import { generateShareText, playEnglishPronunciation } from '../utils/quizUtils';
-import { Trophy, CheckCircle2, XCircle, RotateCcw, Volume2, Sparkles, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { Trophy, CheckCircle2, XCircle, RotateCcw, Volume2, Sparkles, Copy, Check, Bookmark, Eye, EyeOff } from 'lucide-react';
 
 interface QuizResultProps {
   quiz: QuizPackage;
@@ -10,6 +10,9 @@ interface QuizResultProps {
   totalQuestions: number;
   selectedAnswers: (number | null)[];
   onRetry: () => void;
+  isSaved: (question: QuizQuestion) => boolean;
+  onToggleSaved: (question: QuizQuestion) => void;
+  saveError: string;
   onRetryMistakes?: (mistakeQuestions: QuizQuestion[]) => void;
   onSelectAnotherLevel: () => void;
   onOpenArchive: () => void;
@@ -21,6 +24,9 @@ export const QuizResult: React.FC<QuizResultProps> = ({
   totalQuestions,
   selectedAnswers,
   onRetry,
+  isSaved,
+  onToggleSaved,
+  saveError,
   onRetryMistakes,
   onSelectAnotherLevel,
   onOpenArchive,
@@ -167,7 +173,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
               </span>
             </h3>
 
-            {mistakeItems.length > 0 && (
+            {(mistakeItems.length > 0 || !showAllQuestions) && (
               <button
                 onClick={() => setShowAllQuestions(!showAllQuestions)}
                 className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline flex items-center space-x-1"
@@ -187,7 +193,8 @@ export const QuizResult: React.FC<QuizResultProps> = ({
             )}
           </div>
 
-          {mistakeItems.length === 0 ? (
+          {saveError && <p role="alert" className="mb-3 text-sm text-rose-800">{saveError}</p>}
+          {mistakeItems.length === 0 && !showAllQuestions ? (
             /* 100% correct, no mistakes */
             <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-center space-y-1.5">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
@@ -215,7 +222,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
                         : 'bg-rose-50/70 border-2 border-rose-300'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center space-x-2">
                         {isCorrect ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -241,6 +248,10 @@ export const QuizResult: React.FC<QuizResultProps> = ({
                         title="Kiejtés meghallgatása"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button className="quiz-dialog-tab" aria-pressed={isSaved(q)} onClick={() => onToggleSaved(q)}>
+                        <Bookmark aria-hidden="true" size={16} />
+                        {isSaved(q) ? 'Mentve · eltávolítás' : 'Mentés gyakorláshoz'}
                       </button>
                     </div>
 
