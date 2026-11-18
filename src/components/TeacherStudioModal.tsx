@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { QuizImportPanel } from './QuizImportPanel';
 import { QuizReviewPanel } from './QuizReviewPanel';
 import { CefrLevel, QuizPackage, QuizQuestion } from '../types';
 import {
@@ -651,6 +652,11 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   </button>
                 </div>
               )}
+
+              <QuizImportPanel level={level} topic={topic} weekNumber={Number(week) || currentWeekNumber}
+                disabled={isLoading || isGeneratingBundle}
+                onImport={quiz => { setErrorMessage(null); setGeneratedQuiz(quiz); }}
+              />
 
               {generatedQuiz && (
                 <QuizReviewPanel

@@ -38,6 +38,9 @@ const keyVariable = useOpenAi ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
 const modelVariable = useOpenAi ? 'OPENAI_MODEL' : 'GEMINI_MODEL';
 const aiKey = process.env[keyVariable]?.trim();
 const aiModel = process.env[modelVariable]?.trim() || (useOpenAi ? 'gpt-4.1-mini' : 'gemini-flash-latest');
+const configuredThinking = process.env.GEMINI_THINKING_LEVEL?.trim().toUpperCase();
+const thinkingLevel = configuredThinking && ['MINIMAL', 'LOW', 'MEDIUM', 'HIGH'].includes(configuredThinking)
+  ? configuredThinking : undefined;
 
 class AiServiceError extends Error {
   constructor(
@@ -107,7 +110,11 @@ async function requestAiJson(name: string, prompt: string, instructions: string,
   } : {
     systemInstruction: { parts: [{ text: instructions }] },
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema },
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseJsonSchema: schema,
+      ...(thinkingLevel ? { thinkingConfig: { thinkingLevel } } : {}),
+    },
   };
 
   const response = await fetch(endpoint, {
