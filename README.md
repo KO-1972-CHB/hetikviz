@@ -9,8 +9,11 @@ A kiadáshoz futtasd az `npm run build`, majd az `npm start` parancsot.
 Az alkalmazás alapértelmezett portja 3000.
 
 A tanári belépéshez a szerveren állíts be egy egyedi, legalább 16 karakteres
-`TEACHER_PASSWORD` jelszót. Az AI-generáláshoz `OPENAI_API_KEY` is kell.
-Az opcionális `OPENAI_MODEL` alapértéke `gpt-4.1-mini`. Helyben a Gitből kizárt `.env` fájl használható. Élesben az üzemeltető
+`TEACHER_PASSWORD` jelszót. Az alapértelmezett AI-szolgáltató a Gemini,
+amelyhez `GEMINI_API_KEY` kell. A `GEMINI_MODEL` alapértéke
+`gemini-flash-latest`. Az OpenAI választható az `AI_PROVIDER=openai`
+beállítással és `OPENAI_API_KEY` kulccsal. Helyben a Gitből kizárt
+`.env` fájl használható. Élesben az üzemeltető
 titoktárolóját, HTTPS-t és `NODE_ENV=production` beállítást használd.
 
 A tanári munkamenet nyolc óráig tart. Helyi memóriatárolóval szerverindításkor
@@ -34,7 +37,7 @@ Egy négyszintes csomag négy generálásnak számít.
 A Tanári Stúdióban a generált kvíz tervezetként jelenik meg. A kérdések
 szerkeszthetők, az alkalmazás ellenőrzi a kérdésszámot, a feladatformát,
 a megoldókulcsot, az ismétlődéseket, a magyarázatot és a fordítást. A külön
-AI-ellenőrzés OpenAI-kulccsal kérhető. A közzétételhez tanári jóváhagyás kell.
+AI-ellenőrzés a beállított AI-szolgáltató kulcsával kérhető. A közzétételhez tanári jóváhagyás kell.
 A heti csomagban szintenként végezhető el az ellenőrzés és a közzététel.
 
 Önálló kiszolgálón Redis helyett használható a `PUBLISHED_QUIZ_DIR` változó.
@@ -67,7 +70,7 @@ indíts Preview telepítést. Node.js 22.x ajánlott. A repó
    vannak a tanári munkamenetek, a kéréskorlátok és a közzétett kvízek.
 2. Ugyanebben a környezetben a `TEACHER_PASSWORD` értéke legyen egyedi,
    legalább 16 karakteres jelszó. Az AI-kvízkészítéshez és ellenőrzéshez
-   kell az `OPENAI_API_KEY`. A titkos változók neve ne kezdődjön
+   alapértelmezetten a `GEMINI_API_KEY` kell. A titkos változók neve ne kezdődjön
    `VITE_` előtaggal.
 3. Indíts új Preview telepítést az aktuális committal. Nyisd meg a
    `/api/teacher/session` útvonalat a tesztcímen. Kijelentkezve az

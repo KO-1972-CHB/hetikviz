@@ -32,8 +32,12 @@ registerPublishedQuizzes(app, requireTeacher, limitPublish, store);
 
 import { NYELVTAN_CURRICULUM } from './src/data/curriculum.js';
 
-const aiKey = process.env.OPENAI_API_KEY?.trim();
-const aiModel = process.env.OPENAI_MODEL?.trim() || 'gpt-4.1-mini';
+const useOpenAi = process.env.AI_PROVIDER?.trim().toLowerCase() === 'openai';
+const aiName = useOpenAi ? 'OpenAI' : 'Gemini';
+const keyVariable = useOpenAi ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY';
+const modelVariable = useOpenAi ? 'OPENAI_MODEL' : 'GEMINI_MODEL';
+const aiKey = process.env[keyVariable]?.trim();
+const aiModel = process.env[modelVariable]?.trim() || (useOpenAi ? 'gpt-4.1-mini' : 'gemini-flash-latest');
 
 class AiServiceError extends Error {
   constructor(
@@ -47,7 +51,7 @@ class AiServiceError extends Error {
 
 function aiErrorResponse(error: unknown, fallback: string) {
   if (error instanceof AiServiceError) {
-    console.error('OpenAI request failed:', error.diagnostic);
+    console.error(`${aiName} request failed:`, error.diagnostic);
     return { status: error.status, message: error.publicMessage };
   }
   console.error('AI operation failed:', error instanceof Error ? error.name : 'unknown error');
@@ -58,48 +62,76 @@ async function rejectAiResponse(response: Response): Promise<never> {
   const payload = await response.json().catch(() => null);
   const safeLabel = (value: unknown) =>
     typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value) ? value : null;
-  const code = safeLabel(payload?.error?.code);
+  const details = payload?.error?.details;
+  const reason = Array.isArray(details)
+    ? details.find(detail => detail?.['@type'] === 'type.googleapis.com/google.rpc.ErrorInfo')?.reason
+    : undefined;
+  const code = safeLabel(payload?.error?.code) || safeLabel(reason) || safeLabel(payload?.error?.status);
   const type = safeLabel(payload?.error?.type);
   const requestId = safeLabel(response.headers.get('x-request-id'));
   const diagnostic = [`HTTP ${response.status}`, code, type, requestId].filter(Boolean).join(' / ');
 
-  if (response.status === 401) {
-    throw new AiServiceError('Az OpenAI elutasította az API-kulcsot. Ellenőrizd a Preview környezet OPENAI_API_KEY változóját.', diagnostic);
+  if (response.status === 401 || code === 'API_KEY_INVALID' || code === 'API_KEY_EXPIRED') {
+    throw new AiServiceError(`A(z) ${aiName} elutasította az API-kulcsot. Ellenőrizd a Preview környezet ${keyVariable} változóját.`, diagnostic);
   }
   if (code === 'insufficient_quota' || type === 'insufficient_quota' || code === 'billing_hard_limit_reached') {
     throw new AiServiceError('Az OpenAI API-kerete elfogyott vagy a számlázás még nincs beállítva. Ellenőrizd az OpenAI Platform számlázását és a projekt költési keretét.', diagnostic, 503);
   }
   if (response.status === 403 || response.status === 404 || code === 'model_not_found') {
-    throw new AiServiceError('Az OpenAI-kulcs vagy a hozzá tartozó projekt nem fér hozzá a kért modellhez. Ellenőrizd a projekt jogosultságait és az OPENAI_MODEL beállítást.', diagnostic);
+    throw new AiServiceError(`A(z) ${aiName} nem engedélyezte a kért modell használatát. Ellenőrizd az API-projekt hozzáférését és a(z) ${modelVariable} beállítást.`, diagnostic);
   }
   if (response.status === 429) {
-    throw new AiServiceError('Az OpenAI túl sok kérést kapott. Várj egy kicsit, és próbáld újra.', diagnostic, 503);
+    throw new AiServiceError(useOpenAi
+      ? 'Az OpenAI túl sok kérést kapott. Várj egy kicsit, és próbáld újra.'
+      : 'A Gemini elérte a Google-projekt kéréskorlátját vagy kvótáját. Próbáld később, vagy ellenőrizd a modell keretét a Google AI Studióban.', diagnostic, 503);
   }
   if (response.status === 400) {
-    throw new AiServiceError('Az OpenAI nem fogadta el a kérést. Ellenőrizd, hogy a kiválasztott modell támogatja-e a strukturált JSON-válaszokat.', diagnostic);
+    throw new AiServiceError(`A(z) ${aiName} nem fogadta el a kérést. Ellenőrizd, hogy a kiválasztott modell támogatja-e a strukturált JSON-válaszokat.`, diagnostic);
   }
-  throw new AiServiceError('Az OpenAI átmenetileg nem elérhető. Próbáld újra később.', diagnostic, 503);
+  throw new AiServiceError(`A(z) ${aiName} átmenetileg nem elérhető. Próbáld újra később.`, diagnostic, 503);
 }
 
 async function requestAiJson(name: string, prompt: string, instructions: string, schema: object, timeoutMs = 55_000) {
   if (!aiKey) throw new Error('Az AI-szolgáltató még nincs beállítva.');
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${aiKey}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(timeoutMs),
-    body: JSON.stringify({
-      model: aiModel,
-      messages: [{ role: 'system', content: instructions }, { role: 'user', content: prompt }],
-      response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
-    }),
+  const endpoint = useOpenAi
+    ? 'https://api.openai.com/v1/chat/completions'
+    : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(aiModel)}:generateContent`;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (useOpenAi) headers.Authorization = `Bearer ${aiKey}`;
+  else headers['x-goog-api-key'] = aiKey;
+
+  const body = useOpenAi ? {
+    model: aiModel,
+    messages: [{ role: 'system', content: instructions }, { role: 'user', content: prompt }],
+    response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
+  } : {
+    systemInstruction: { parts: [{ text: instructions }] },
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema },
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST', headers, signal: AbortSignal.timeout(timeoutMs), body: JSON.stringify(body),
   }).catch((error: unknown) => {
     if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new AiServiceError('Az OpenAI válasza túl sokáig tartott. Próbáld újra, vagy készíts egyszerre egy kvízt.', 'request timeout', 504);
+      throw new AiServiceError(`A(z) ${aiName} válasza túl sokáig tartott. Próbáld újra, vagy készíts egyszerre egy kvízt.`, 'request timeout', 504);
     }
-    throw new AiServiceError('A szerver nem éri el az OpenAI API-t. Próbáld újra később.', 'connection failed', 503);
+    throw new AiServiceError(`A szerver nem éri el a(z) ${aiName} API-t. Próbáld újra később.`, 'connection failed', 503);
   });
   if (!response.ok) return rejectAiResponse(response);
   const reply = await response.json();
+  if (!useOpenAi) {
+    const candidate = reply.candidates?.[0];
+    const parts = candidate?.content?.parts;
+    if (candidate?.finishReason !== 'STOP' || !Array.isArray(parts)) {
+      throw new Error('A Gemini nem küldött feldolgozható választ.');
+    }
+    const text = parts
+      .filter(part => part?.thought !== true && typeof part?.text === 'string')
+      .map(part => part.text)
+      .join('');
+    return JSON.parse(text);
+  }
   const message = reply.choices?.[0]?.message;
   if (reply.choices?.[0]?.finish_reason !== 'stop' || message?.refusal || typeof message?.content !== 'string') {
     throw new Error('Az AI nem küldött feldolgozható választ.');
@@ -193,7 +225,7 @@ app.post('/api/review-quiz', requireTeacher, limitGeneration(), async (req, res)
   const quiz = req.body?.quiz;
   const errors = reviewQuiz(quiz);
   if (errors.length) return res.status(400).json({ error: errors.join(' ') });
-  if (!aiKey) return res.status(503).json({ error: 'Az AI-ellenőrzés még nincs beállítva.' });
+  if (!aiKey) return res.status(503).json({ error: `A(z) ${aiName} ellenőrzéshez állítsd be a(z) ${keyVariable} változót.` });
 
   try {
     const options = quiz.questions.map((q: any, index: number) => ({
@@ -253,7 +285,7 @@ app.post('/api/generate-quiz', requireTeacher, limitGeneration(), async (req, re
         !Number.isInteger(count) || count < 1 || count > 10) {
       return res.status(400).json({ success: false, error: 'Érvénytelen szint, téma vagy kérdésszám.' });
     }
-    if (!aiKey) return res.status(503).json({ success: false, error: 'Az AI-generálás még nincs beállítva.' });
+    if (!aiKey) return res.status(503).json({ success: false, error: `A(z) ${aiName} generáláshoz állítsd be a(z) ${keyVariable} változót.` });
     const data = await generateQuizData(level, topic, count);
     return res.json({ success: true, data });
   } catch (error) {
@@ -269,7 +301,7 @@ app.post('/api/generate-weekly-bundle', requireTeacher, limitGeneration(4), asyn
     if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > 53) {
       return res.status(400).json({ success: false, error: 'A hét száma 1 és 53 közötti egész szám legyen.' });
     }
-    if (!aiKey) return res.status(503).json({ success: false, error: 'Az AI-generálás még nincs beállítva.' });
+    if (!aiKey) return res.status(503).json({ success: false, error: `A(z) ${aiName} generáláshoz állítsd be a(z) ${keyVariable} változót.` });
     const levels = ['A1', 'A2', 'B1', 'B2'] as const;
 
     // Pick a random curriculum topic for each level from the 100-point curriculum
