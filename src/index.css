@@ -124,9 +124,9 @@
     color: #245886;
   }
 
-  [data-level="A2"] .level-badge { background: #d5f0e9; color: #165e52; }
-  [data-level="B1"] .level-badge { background: #ffead7; color: #854723; }
-  [data-level="B2"] .level-badge { background: #ede3fa; color: #62408d; }
+  [data-level="A2"] .level-badge, .level-badge[data-archive-level="A2"] { background: #d5f0e9; color: #165e52; }
+  [data-level="B1"] .level-badge, .level-badge[data-archive-level="B1"] { background: #ffead7; color: #854723; }
+  [data-level="B2"] .level-badge, .level-badge[data-archive-level="B2"] { background: #ede3fa; color: #62408d; }
   .level-arrow { flex: none; color: #176487; }
   @media (max-width: 47.99rem) {
     .level-arrow { display: none; }
@@ -149,4 +149,74 @@
   }
 
   .quiz-primary:hover { background: #064766; }
+}
+
+@layer components {
+  .quiz-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: clamp(.625rem, 3vw, 1.5rem);
+    background: #0d304db0;
+  }
+
+  .quiz-dialog {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-height: 92dvh;
+    padding: clamp(.75rem, 3vw, 1.5rem);
+    border: 1px solid #cce1eb;
+    border-radius: 1.5rem;
+    background: #f2f8fc;
+    box-shadow: 0 24px 70px #092a4b40;
+  }
+
+  .quiz-dialog-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .625rem;
+    flex: none;
+    padding-bottom: .75rem;
+    border-bottom: 1px solid #cce1eb;
+  }
+
+  .quiz-dialog-icon, .quiz-dialog-close {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .85rem;
+  }
+
+  .quiz-dialog-close, .quiz-dialog-tab {
+    background: white;
+    color: #174e6b;
+    cursor: pointer;
+  }
+
+  .quiz-dialog-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    min-height: 2.75rem;
+    padding-inline: .7rem;
+    border-radius: .8rem;
+    font-size: .875rem;
+    font-weight: 700;
+  }
+
+  .quiz-dialog-close:hover, .quiz-dialog-tab:hover { background: #deeff8; }
+  .quiz-dialog-tab[aria-pressed="true"] { background: #075e87; color: white; }
+
+  .quiz-dialog-input {
+    border: 1px solid #accfdf;
+    border-radius: .85rem;
+    background: white;
+  }
 }

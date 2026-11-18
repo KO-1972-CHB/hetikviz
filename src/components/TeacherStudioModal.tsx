@@ -327,28 +327,30 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div className="quiz-dialog-backdrop">
       <div
-        className={`bg-white rounded-3xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col transition-all ${
-          activeTab === 'source' ? 'max-w-5xl' : 'max-w-2xl'
+        role="dialog"
+        aria-labelledby="teacher-studio-title"
+        className={`quiz-dialog ${
+          activeTab === 'source' ? 'max-w-5xl' : 'max-w-3xl'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-900 flex items-center justify-center shadow-xs">
+        <div className="quiz-dialog-heading">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="quiz-dialog-icon bg-[#ede3fa] text-[#62408d]">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-medium text-slate-900 tracking-tight">
+              <h2 id="teacher-studio-title" className="text-lg font-bold leading-tight tracking-tight sm:text-2xl">
                 Tanári Vezérlő & AI Kvízkészítő
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="mt-1 text-sm text-[#426075]">
                 Készíts új 10 kérdéses heti csomagokat a közösségnek másodpercek alatt!
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={handleDownloadSourceZip}
               disabled={isDownloadingZip}
@@ -365,12 +367,13 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 className="py-1 px-2 sm:px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] sm:text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
                 title="Rendszerverzió és funkciókalauz megtekintése"
               >
-                <span>v2.8 Útmutató</span>
+                <span>4.0 útmutató</span>
               </button>
             )}
             <button
               onClick={onClose}
-              className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition cursor-pointer"
+              aria-label="Tanári Stúdió bezárása"
+              className="quiz-dialog-close"
             >
               <X className="w-5 h-5" />
             </button>
@@ -378,41 +381,32 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
         </div>
 
         {/* Tabs: AI Generator vs 100 Témás Tematika vs Forráskód */}
-        <div className="flex flex-wrap border-b border-slate-200 shrink-0 pt-2">
+        <div className="flex flex-wrap gap-1.5 py-3 shrink-0">
           <button
             onClick={() => setActiveTab('generator')}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'generator'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'generator'}
+            className="quiz-dialog-tab"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Kvízgeneráló & Szerkesztő</span>
+            <span>Kvízgenerálás és szerkesztés</span>
           </button>
 
           <button
             onClick={() => setActiveTab('curriculum')}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'curriculum'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'curriculum'}
+            className="quiz-dialog-tab"
           >
             <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-            <span>100 Témás Nyelvtan (A1-B2)</span>
+            <span>Nyelvtani tematika (A1–B2)</span>
           </button>
 
           <button
             onClick={handleOpenSourceTab}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'source'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'source'}
+            className="quiz-dialog-tab"
           >
             <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Forráskód (src, components, package.json)</span>
+            <span>Forráskód</span>
           </button>
         </div>
 
@@ -423,13 +417,13 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
               {/* ========================================================================= */}
               {/* 1-CLICK MULTI-LEVEL WEEKLY BUNDLE GENERATOR (A1 + A2 + B1 + B2) */}
               {/* ========================================================================= */}
-              <div className="bg-gradient-to-r from-amber-50 via-emerald-50 to-sky-50 border-2 border-emerald-400/80 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="bg-[#edf7fc] border border-[#b9d9e9] rounded-2xl p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-amber-950 px-2 py-0.5 rounded-md shadow-2xs flex items-center space-x-1">
                         <Layers className="w-3 h-3" />
-                        <span>1-Gombnyomásos Heti Csomag ⚡</span>
+                        <span>Heti csomag</span>
                       </span>
                       <span className="text-xs font-medium text-slate-700">
                         {week}. heti feladatsorok
@@ -448,10 +442,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   <button
                     onClick={handleGenerateBundle}
                     disabled={isGeneratingBundle || isLoading}
-                    className="py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-900 tracking-tight flex items-center justify-center space-x-2 transition shadow-md shrink-0 cursor-pointer disabled:opacity-50"
-                    style={{
-                      background: 'linear-gradient(90deg, #facc15 0%, #34d399 50%, #38bdf8 100%)',
-                    }}
+                    className="quiz-primary min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-50"
                   >
                     {isGeneratingBundle ? (
                       <>
@@ -461,7 +452,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        <span>Heti 4 Kvíz Generálása 🚀</span>
+                        <span>4 heti kvíz generálása</span>
                       </>
                     )}
                   </button>
@@ -556,7 +547,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
               {/* ========================================================================= */}
               {/* SINGLE QUIZ GENERATOR & CUSTOMIZER */}
               {/* ========================================================================= */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3.5">
+              <div className="bg-white p-4 rounded-2xl border border-[#cce1eb] space-y-3.5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-medium uppercase tracking-wider text-slate-700">
                     Egyedi Kvíz Generálása vagy Módosítása:
