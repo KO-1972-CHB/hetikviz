@@ -165,6 +165,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
         setStage('finished');
         setMistakesReviewed(true);
         confetti({
+          disableForReducedMotion: true,
           particleCount: 80,
           spread: 70,
           origin: { y: 0.6 },
@@ -197,6 +198,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
 
         setStage('finished');
         confetti({
+          disableForReducedMotion: true,
           particleCount: 100,
           spread: 80,
           origin: { y: 0.6 },
@@ -256,16 +258,16 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
   const letters = ['a', 'b', 'c', 'd'];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+    <div className="quiz-dialog-backdrop">
+      <div role="dialog" aria-labelledby="diagnostic-title" className="quiz-dialog max-w-2xl">
         {/* Top Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+        <div className="quiz-dialog-heading">
           <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center font-black shadow-xs">
+            <div className="quiz-dialog-icon bg-[#d3eaf6] text-[#07577d]">
               🎯
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-medium text-slate-900 tracking-tight">
+              <h2 id="diagnostic-title" className="text-lg font-bold tracking-tight sm:text-2xl">
                 20 Kérdéses Angol Szintfelmérő
               </h2>
               <p className="text-xs text-slate-500 font-normal">
@@ -277,7 +279,8 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition cursor-pointer"
+            aria-label="Szintfelmérő bezárása"
+            className="quiz-dialog-close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -285,14 +288,14 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
 
         {/* ================= STAGE 1: INTRO ================= */}
         {stage === 'intro' && (
-          <div className="py-6 space-y-5 text-center my-auto">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-200 text-emerald-700 mb-1">
-              <Sparkles className="w-10 h-10 animate-pulse" />
+          <div className="py-4 px-1 space-y-4 text-center overflow-y-auto min-h-0">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#d3eaf6] text-[#07577d]">
+              <Sparkles className="w-8 h-8" />
             </div>
 
             <div>
               <h3 className="text-xl sm:text-2xl font-medium text-slate-900 tracking-tight">
-                Tudd meg pontosan, hol tartasz!
+                Melyik szint illik hozzád?
               </h3>
               <p className="text-sm text-slate-600 mt-2 max-w-md mx-auto leading-relaxed">
                 A teszt véletlenszerűen válogat <strong>20 mondatot</strong> a <strong>300 kérdéses</strong> nyelvtani adatbázisból (szintenként 75-75 feladatból a teljes 100 témás tematikára építve):
@@ -300,7 +303,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
             </div>
 
             {/* Level distribution pills */}
-            <div className="grid grid-cols-4 gap-2 max-w-md mx-auto text-xs font-bold">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-md mx-auto text-xs font-bold">
               <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-emerald-900">
                 <span className="block text-sm font-black">5 db</span>
                 <span>A1 Kezdő</span>
@@ -325,10 +328,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
 
             <button
               onClick={handleStartTest}
-              className="w-full max-w-md mx-auto py-4 px-6 rounded-2xl font-black text-slate-900 text-base sm:text-lg shadow-md hover:shadow-lg transition cursor-pointer flex items-center justify-center space-x-2"
-              style={{
-                background: 'linear-gradient(90deg, #f87171 0%, #fb923c 25%, #facc15 50%, #60a5fa 75%, #a855f7 100%)',
-              }}
+              className="quiz-primary w-full min-h-12 items-center gap-2 rounded-2xl px-4 py-3 font-bold"
             >
               <span>Szintfelmérő Indítása (20 Kérdés) 🚀</span>
             </button>
@@ -370,17 +370,18 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
               </div>
 
               {/* Progress Bar */}
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-4 border border-slate-200">
+              <div role="progressbar" aria-label="Szintfelmérő haladása" aria-valuemin={0} aria-valuemax={questions.length}
+                aria-valuenow={currentIndex + 1} className="w-full bg-[#d3eaf6] h-2 rounded-full overflow-hidden mb-4">
                 <div
-                  className="bg-emerald-500 h-full transition-all duration-300"
+                  className="bg-[#075e87] h-full transition-[width] duration-300"
                   style={{ width: `${Math.round(((currentIndex + 1) / questions.length) * 100)}%` }}
                 />
               </div>
 
               {/* Question Sentence Box */}
-              <div className="bg-[#FAF7F2] rounded-2xl border-2 border-[#f87171] p-4 sm:p-5 mb-3 shadow-xs">
+              <div className="bg-[#edf6fb] rounded-2xl border border-[#cce1eb] p-4 sm:p-5 mb-3">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[11px] font-black tracking-wider text-[#EF5B5B] uppercase">
+                  <span className="text-[11px] font-black tracking-wider text-[#07577d] uppercase">
                     KÉRDÉS {currentIndex + 1} / {questions.length}
                   </span>
 
@@ -416,7 +417,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
                       return (
                         <span
                           key={idx}
-                          className="inline-block border-b-3 border-[#f87171] min-w-[70px] sm:min-w-[85px] mx-1 align-baseline h-1"
+                          className="inline-block border-b-3 border-[#176487] min-w-[70px] sm:min-w-[85px] mx-1 align-baseline h-1"
                         />
                       );
                     }
@@ -432,8 +433,8 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
                   const isThisSelected = selectedAnswer === idx;
                   const isThisCorrect = idx === currentQ.correctIndex;
 
-                  let style = 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-800';
-                  let pillStyle = 'bg-slate-200 text-slate-800';
+                  let style = 'bg-white border-[#c7dce7] hover:border-[#4984a0] hover:bg-[#eef7fc] text-slate-800';
+                  let pillStyle = 'bg-[#dceaf9] text-[#245886]';
 
                   if (isAnswered) {
                     if (isThisCorrect) {
@@ -490,10 +491,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
               <div className="pt-3">
                 <button
                   onClick={handleNext}
-                  className="w-full py-3.5 px-4 rounded-xl font-black text-slate-900 text-base shadow-md transition flex items-center justify-center space-x-2 cursor-pointer"
-                  style={{
-                    background: 'linear-gradient(90deg, #f87171 0%, #fb923c 25%, #facc15 50%, #60a5fa 75%, #a855f7 100%)',
-                  }}
+                  className="quiz-primary w-full min-h-12 items-center gap-2 rounded-2xl px-4 py-3 font-bold"
                 >
                   <span>
                     {currentIndex + 1 === questions.length
@@ -512,9 +510,9 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
         {stage === 'finished' && (
           <div className="py-2 overflow-y-auto space-y-4">
             {/* Header Result */}
-            <div className="text-center pt-2">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-tr from-amber-400 to-emerald-400 text-white shadow-md mb-2">
-                <Trophy className="w-7 h-7 text-slate-900" />
+            <div className="text-center rounded-2xl bg-[#edf6fb] p-4">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#d3eaf6] text-[#07577d] mb-2">
+                <Trophy className="w-7 h-7" />
               </div>
 
               <span className="text-xs font-black uppercase tracking-wider text-slate-500 block">
@@ -660,10 +658,7 @@ export const DiagnosticModal: React.FC<DiagnosticModalProps> = ({
                 {!mistakesReviewed && (
                   <button
                     onClick={handleStartMistakePractice}
-                    className="w-full py-2.5 px-3 rounded-xl font-bold text-xs text-slate-900 transition flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
-                    style={{
-                      background: 'linear-gradient(90deg, #facc15 0%, #fb923c 50%, #f87171 100%)',
-                    }}
+                    className="quiz-primary w-full min-h-12 items-center gap-2 rounded-2xl px-4 py-3 font-bold"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Csak a hibák újra gyakorlása ({savedSummary.mistakes.length} mondat) 🔄</span>

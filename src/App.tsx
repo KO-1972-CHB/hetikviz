@@ -15,6 +15,8 @@ import {
   setPinnedWeeklyQuiz,
   getActiveWeeklyQuizForLevel,
 } from './utils/quizUtils';
+import { SavedPracticeModal } from './components/SavedPracticeModal';
+import { readSavedQuestions, savedQuestion, setQuestionSaved, type SavedQuestion } from './utils/savedPractice';
 import { Header } from './components/Header';
 import { LevelSelector } from './components/LevelSelector';
 import { QuizCard } from './components/QuizCard';
@@ -23,45 +25,43 @@ import { WeeklyArchiveModal } from './components/WeeklyArchiveModal';
 import { TeacherStudioModal } from './components/TeacherStudioModal';
 import { DiagnosticModal } from './components/DiagnosticModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
+import { publishedQuizId } from './utils/quizReview';
 import { ChangelogModal } from './components/ChangelogModal';
 import { MessageCircle, ExternalLink, Calendar, Users, Sparkles, BookOpen, Lock, ShieldCheck, FileText } from 'lucide-react';
 
 export default function App() {
   const currentWeekNumber = useMemo(() => getCurrentWeekNumber(), []);
 
-  // Teacher / Admin mode state: enabled via URL param (?admin=true or ?tanar=1) or stored in localStorage
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('admin') === 'true' || params.get('tanar') === '1' || params.get('teacher') === '1') {
-        localStorage.setItem('gyakorlatias_admin_mode', 'true');
-        return true;
-      }
-      return localStorage.getItem('gyakorlatias_admin_mode') === 'true';
-    }
-    return false;
-  });
-
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/teacher/session', { signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(session => {
+        if (!controller.signal.aborted && session?.authenticated) setIsAdmin(true);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   const handleLoginSuccess = () => {
     setIsAdmin(true);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gyakorlatias_admin_mode', 'true');
-    }
     setIsTeacherStudioOpen(true);
   };
 
-  const handleLogoutAdmin = () => {
-    setIsAdmin(false);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('gyakorlatias_admin_mode');
-      const params = new URLSearchParams(window.location.search);
-      params.delete('admin');
-      params.delete('tanar');
-      params.delete('teacher');
-      const newSearch = params.toString() ? `?${params.toString()}` : window.location.pathname;
-      window.history.replaceState(null, '', newSearch);
+  const handleLogoutAdmin = async () => {
+    try {
+      const response = await fetch('/api/teacher/session', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) throw new Error();
+      setIsAdmin(false);
+      setIsTeacherStudioOpen(false);
+    } catch {
+      window.alert('A kijelentkezés sikertelen. Próbáld újra!');
     }
   };
 
@@ -110,6 +110,24 @@ export default function App() {
   const [answersHistory, setAnswersHistory] = useState<boolean[]>([]);
   const [selectedAnswersHistory, setSelectedAnswersHistory] = useState<(number | null)[]>([]);
   const [isFinished, setIsFinished] = useState(false);
+
+  const [practiceOpen, setPracticeOpen] = useState(false);
+  const [practiceError, setPracticeError] = useState('');
+  const [savedQuestions, setSavedQuestions] = useState(readSavedQuestions);
+  const [practiceSources, setPracticeSources] = useState<SavedQuestion[]>([]);
+
+  function changeSaved(item: SavedQuestion, shouldSave: boolean) {
+    try {
+      setSavedQuestions(setQuestionSaved(item, shouldSave));
+      setPracticeError('');
+    } catch {
+      setPracticeError('A böngésző nem tudta módosítani a mentett kérdéseket.');
+    }
+  }
+
+  function practiceItem(question: QuizPackage['questions'][number]) {
+    return practiceSources.find(item => item.question.id === question.id) || savedQuestion(currentQuiz, question);
+  }
 
   // Modals state
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
@@ -180,6 +198,23 @@ export default function App() {
     setIsFinished(false);
   };
 
+  function startSavedPractice(items: SavedQuestion[]) {
+    if (!items.length) return;
+    const now = new Date();
+    const sources = items.map((item, index) => ({
+      ...item, question: { ...item.question, id: `saved-${index}` },
+    }));
+    setPracticeSources(sources);
+    setCurrentLevel(items[0].level);
+    setPracticeOpen(false);
+    window.history.replaceState(null, '', window.location.pathname);
+    resetQuizState({
+      id: 'saved-practice', title: 'Saját gyakorlás', subtitle: 'Elmentett kérdéseid',
+      level: items[0].level, weekNumber: currentWeekNumber, year: now.getFullYear(),
+      topic: items[0].topic, questions: sources.map(item => item.question),
+    });
+  }
+
   // Practice only the mistaken questions
   const handleRetryMistakes = (mistakeQuestions: QuizPackage['questions']) => {
     if (mistakeQuestions.length === 0) return;
@@ -207,6 +242,7 @@ export default function App() {
 
   // Handle Level Selection
   const handleSelectLevel = (lvl: CefrLevel) => {
+    setPracticeSources([]);
     setCurrentLevel(lvl);
     const match = getActiveWeeklyQuizForLevel(lvl, allQuizzes) || allQuizzes[0];
     resetQuizState(match);
@@ -215,6 +251,7 @@ export default function App() {
 
   // Handle Specific Quiz Selection
   const handleSelectQuiz = (quiz: QuizPackage) => {
+    setPracticeSources([]);
     setCurrentLevel(quiz.level);
     resetQuizState(quiz);
     updateUrlParams(quiz.level, quiz.id);
@@ -252,13 +289,17 @@ export default function App() {
         totalQuestions: currentQuiz.questions.length,
         selectedAnswers: newSelectedHistory.map((s) => s ?? -1),
       };
-      saveAttempt(attempt);
-      setAttempts(getStoredAttempts());
+      if (!currentQuiz.id.startsWith('saved-practice')) {
+        saveAttempt(attempt);
+        setAttempts(getStoredAttempts());
+      }
     }
   };
 
   const handleCustomQuizCreated = (newQuiz: QuizPackage) => {
-    setPinnedWeeklyQuiz(newQuiz.level, newQuiz.id);
+    if (getPinnedWeeklyQuizzes()[newQuiz.level] !== newQuiz.id) {
+      setPinnedWeeklyQuiz(newQuiz.level, newQuiz.id);
+    }
     setPinnedQuizzes(getPinnedWeeklyQuizzes());
     setAllQuizzes(getAllQuizzes());
     handleSelectQuiz(newQuiz);
@@ -266,6 +307,8 @@ export default function App() {
 
   // Navigates directly back to the active weekly quiz base view
   const handleGoHome = () => {
+    setPracticeSources([]);
+    setPracticeOpen(false);
     setIsArchiveOpen(false);
     setIsTeacherStudioOpen(false);
     setIsDiagnosticOpen(false);
@@ -276,22 +319,65 @@ export default function App() {
     updateUrlParams(defaultQuiz.level, defaultQuiz.id);
   };
 
+  const [sharedId] = useState(() => new URLSearchParams(window.location.search).get('quiz') ?? '');
+  const [sharedStatus, setSharedStatus] = useState<'loading' | 'error' | null>(
+    sharedId.startsWith('published-') ? 'loading' : null,
+  );
+
+  useEffect(() => {
+    if (!sharedId.startsWith('published-')) return;
+    if (!publishedQuizId.test(sharedId)) {
+      setSharedStatus('error');
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/published-quizzes/${sharedId}`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error();
+        const quiz: QuizPackage = await response.json();
+        if (quiz.id !== sharedId || !quiz.questions?.length) throw new Error();
+        if (controller.signal.aborted) return;
+        resetQuizState(quiz);
+        setCurrentLevel(quiz.level);
+        setSharedStatus(null);
+      })
+      .catch(() => { if (!controller.signal.aborted) setSharedStatus('error'); });
+    return () => controller.abort();
+  }, [sharedId]);
+
+  if (sharedStatus) {
+    return (
+      <main className="app-container py-10">
+        <div className="quiz-surface rounded-2xl p-6">
+          <h1 className="text-xl font-bold">{sharedStatus === 'loading' ? 'A megosztott kvíz betöltése…' : 'A megosztott kvíz nem érhető el'}</h1>
+          {sharedStatus === 'error' && (
+            <>
+              <p className="mt-2">Ellenőrizd a linket, vagy kérj újat a tanártól.</p>
+              <a className="mt-4 inline-block font-bold text-[#07577d] underline" href={window.location.pathname}>
+                Vissza a heti kvízekhez
+              </a>
+            </>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   const currentQ = currentQuiz.questions[questionIndex] || currentQuiz.questions[0];
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col font-sans text-[#202124] antialiased selection:bg-amber-200 selection:text-slate-900">
-      {/* Header with Gyakorlatias Angol Brand Bar and Hero Gradient */}
+    <div className="min-h-screen flex flex-col antialiased">
       <Header
         currentQuiz={currentQuiz}
         currentLevel={currentLevel}
         questionIndex={questionIndex}
         totalQuestions={currentQuiz.questions.length}
         score={score}
+        onOpenPractice={() => { setSavedQuestions(readSavedQuestions()); setPracticeError(''); setPracticeOpen(true); }}
         onOpenArchive={() => setIsArchiveOpen(true)}
         onOpenTeacherStudio={() => setIsTeacherStudioOpen(true)}
         onOpenDiagnostic={() => setIsDiagnosticOpen(true)}
         onGoHome={handleGoHome}
-        completedAttemptsCount={attempts.length}
         isAdmin={isAdmin}
         onLogoutAdmin={handleLogoutAdmin}
       />
@@ -308,29 +394,10 @@ export default function App() {
           />
         )}
 
-        {/* Weekly schedule hint banner */}
-        {!isFinished && (
-          <div className="w-full max-w-xl mx-auto px-4 pt-1 pb-1">
-            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs text-emerald-900">
-              <div className="flex items-center space-x-1.5 font-medium flex-wrap gap-y-1">
-                <span className="text-emerald-700">🗓️</span>
-                <span>
-                  <strong>Heti feladatsor ({currentQuiz.weekNumber}. hét)</strong> • 10 kérdés azonnali magyar magyarázattal
-                </span>
-                {pinnedQuizzes[currentLevel] === currentQuiz.id && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-md bg-amber-400 text-amber-950 font-black text-[10px] shadow-xs">
-                    ⭐ Heti kiemelt
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => setIsArchiveOpen(true)}
-                className="text-emerald-800 font-bold underline hover:text-emerald-950 shrink-0 ml-2 cursor-pointer"
-              >
-                További kvízek →
-              </button>
-            </div>
-          </div>
+        {!isFinished && pinnedQuizzes[currentLevel] === currentQuiz.id && (
+          <p className="mb-2 rounded-full bg-[#fff0dc] px-3 py-1 text-sm font-semibold text-[#743d1c]">
+            Heti kiemelt kvíz
+          </p>
         )}
 
         {/* Active Quiz Card or Finished Results */}
@@ -352,6 +419,12 @@ export default function App() {
             selectedAnswers={selectedAnswersHistory}
             onRetry={() => resetQuizState()}
             onRetryMistakes={handleRetryMistakes}
+            isSaved={q => savedQuestions.some(item => item.key === practiceItem(q).key)}
+            onToggleSaved={q => {
+              const item = practiceItem(q);
+              changeSaved(item, !savedQuestions.some(saved => saved.key === item.key));
+            }}
+            saveError={practiceError}
             onSelectAnotherLevel={() => {
               resetQuizState();
               setIsDiagnosticOpen(true);
@@ -391,8 +464,8 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full bg-slate-900 text-white py-6 px-4 text-xs mt-6 border-t border-slate-800">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-400">
+      <footer className="w-full bg-[#12354a] text-white py-6 px-4 text-xs mt-6">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-[#b8d3e2]">
           <div className="flex items-center space-x-2">
             <span className="text-base">☕</span>
             <span className="font-medium text-white tracking-tight">GYAKORLATIAS ANGOL</span>
@@ -424,7 +497,7 @@ export default function App() {
               title="Rendszerverzió és funkciókalauz megtekintése"
             >
               <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span>v2.8 Verziókövetés</span>
+              <span>v4.0 Verziókövetés</span>
             </button>
 
             {isAdmin ? (
@@ -438,7 +511,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={handleLogoutAdmin}
-                  className="hover:text-rose-400 text-slate-500 text-[11px] transition cursor-pointer"
+                  className="hover:text-rose-400 text-[#b8d3e2] text-[11px] transition cursor-pointer"
                   title="Kilépés a Tanári módból (Diák nézet)"
                 >
                   (Kilépés)
@@ -447,7 +520,7 @@ export default function App() {
             ) : (
               <button
                 onClick={() => setIsAdminLoginOpen(true)}
-                className="hover:text-slate-300 transition text-slate-500 text-[11px] flex items-center space-x-1 cursor-pointer"
+                className="hover:text-slate-300 transition text-[#b8d3e2] text-[11px] flex items-center space-x-1 cursor-pointer"
                 title="Tanári belépés az AI Kvízkészítőhöz"
               >
                 <Lock className="w-3 h-3" />
@@ -474,13 +547,23 @@ export default function App() {
       />
 
       <TeacherStudioModal
-        isOpen={isTeacherStudioOpen}
+        isOpen={isAdmin && isTeacherStudioOpen}
         onClose={() => setIsTeacherStudioOpen(false)}
         onQuizCreatedOrSelected={handleCustomQuizCreated}
         currentWeekNumber={currentWeekNumber}
         onQuizDeleted={() => setAllQuizzes(getAllQuizzes())}
+        onPublished={() => setAllQuizzes(getAllQuizzes())}
         onOpenChangelog={() => setIsChangelogOpen(true)}
       />
+
+      {practiceOpen && (
+        <SavedPracticeModal
+          questions={savedQuestions} error={practiceError}
+          onClose={() => setPracticeOpen(false)}
+          onRemove={item => changeSaved(item, false)}
+          onPractice={startSavedPractice}
+        />
+      )}
 
       <DiagnosticModal
         isOpen={isDiagnosticOpen}

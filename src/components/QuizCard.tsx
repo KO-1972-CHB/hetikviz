@@ -32,10 +32,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
   // Default pill color styles matching the user's reference screenshot
   const optionPillStyles = [
-    'bg-emerald-500 text-white',
-    'bg-sky-400 text-white',
-    'bg-teal-400 text-white',
-    'bg-amber-400 text-slate-900',
+    'bg-[#d5f0e9] text-[#165e52]',
+    'bg-[#dceaf9] text-[#245886]',
+    'bg-[#ede3fa] text-[#62408d]',
+    'bg-[#ffead7] text-[#854723]',
   ];
 
   const handleSelectOption = (idx: number) => {
@@ -59,32 +59,31 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 py-3">
-      <div className="bg-[#FAF7F2] border border-[#f1e9dc] rounded-3xl p-4 sm:p-6 shadow-sm">
-        {/* ================= Question Box (Distinct Coral Border) ================= */}
-        <div className="bg-white rounded-2xl border-2 border-[#f87171] p-5 shadow-xs mb-4 relative transition-all">
+    <div className="w-full max-w-3xl mx-auto px-4 pb-3">
+      <div className="quiz-surface rounded-[1.5rem] p-4 sm:p-7">
+        <div className="rounded-2xl bg-[#edf6fb] p-4 sm:p-5 mb-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs sm:text-sm font-medium tracking-wider text-[#EF5B5B] uppercase">
-              KÉRDÉS {questionIndex + 1} / {totalQuestions}
+            <span className="text-sm font-bold text-[#07577d]">
+              {question.question.includes('_') ? 'Egészítsd ki a mondatot' : 'Válaszd ki a helyes választ'}
             </span>
 
             {/* Audio pronunciation button */}
             <button
               onClick={handleSpeak}
-              className={`p-1.5 rounded-full transition flex items-center space-x-1 text-xs font-medium ${
+              className={`min-h-11 px-2.5 rounded-xl transition flex items-center gap-1.5 text-xs font-semibold cursor-pointer ${
                 isPlayingAudio
                   ? 'bg-amber-100 text-amber-800 scale-105'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  : 'bg-white hover:bg-[#dceffa] text-[#07577d]'
               }`}
               title="Kiejtés meghallgatása (anyanyelvi hang)"
             >
               <Volume2 className={`w-4 h-4 ${isPlayingAudio ? 'animate-bounce text-amber-600' : ''}`} />
-              <span className="hidden sm:inline text-[11px]">Kiejtés</span>
+              <span className="text-xs">Kiejtés</span>
             </button>
           </div>
 
           {/* English sentence with blank (clean single line) */}
-          <div className="text-xl sm:text-2xl font-medium text-slate-900 tracking-tight leading-relaxed">
+          <div lang="en" className="text-xl sm:text-2xl font-semibold text-[#142c3d] tracking-tight leading-relaxed [overflow-wrap:anywhere]">
             {question.question.split(/(_+)/g).map((part, idx) => {
               if (part.startsWith('_')) {
                 if (isAnswered) {
@@ -105,7 +104,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 return (
                   <span
                     key={idx}
-                    className="inline-block border-b-3 border-[#f87171] min-w-[75px] sm:min-w-[95px] mx-1.5 align-baseline h-1"
+                    className="inline-block border-b-3 border-[#116a91] min-w-[75px] sm:min-w-[95px] mx-1.5 align-baseline h-1"
                     aria-label="hiányzó rész"
                   />
                 );
@@ -123,7 +122,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             const isThisCorrect = idx === question.correctIndex;
 
             // Compute styling states
-            let cardStyle = 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80 text-slate-800';
+            let cardStyle = 'bg-white border-[#c7dce7] hover:border-[#4984a0] hover:bg-[#eef7fc] text-slate-800';
             let letterPill = optionPillStyles[idx % optionPillStyles.length];
 
             if (isAnswered) {
@@ -150,13 +149,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
                 <div className="flex items-center space-x-3.5">
                   {/* Option letter pill (a, b, c) */}
                   <span
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs shrink-0 ${letterPill}`}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 ${letterPill}`}
                   >
                     {letter}
                   </span>
 
                   {/* Option Text */}
-                  <span className="text-base sm:text-lg font-semibold tracking-tight">{option}</span>
+                  <span lang="en" className="text-base sm:text-lg font-semibold tracking-tight [overflow-wrap:anywhere]">{option}</span>
                 </div>
 
                 {/* Status indicator icon if answered */}
@@ -216,14 +215,10 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </div>
         )}
 
-        {/* ================= Vibrant Gradient CTA Button ================= */}
         {isAnswered && (
           <button
             onClick={onNextQuestion}
-            className="w-full py-3.5 px-6 rounded-2xl font-medium text-slate-900 text-base sm:text-lg tracking-tight shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-2 cursor-pointer"
-            style={{
-              background: 'linear-gradient(90deg, #f87171 0%, #fb923c 25%, #facc15 50%, #60a5fa 75%, #a855f7 100%)',
-            }}
+            className="quiz-primary w-full py-3.5 px-6 rounded-2xl text-base font-bold"
           >
             <span>
               {questionIndex + 1 === totalQuestions ? 'Eredmények megtekintése 🏆' : 'Következő kérdés →'}
@@ -231,8 +226,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
           </button>
         )}
 
-        {/* ================= Dots Indicator (Matching Bottom of Screenshot) ================= */}
-        <div className="mt-5 flex items-center justify-center space-x-2">
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           {Array.from({ length: totalQuestions }).map((_, idx) => {
             const isPast = idx < answersHistory.length;
             const wasCorrect = isPast ? answersHistory[idx] : null;
@@ -240,7 +234,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
 
             let dotColor = 'bg-slate-300';
             if (isCurrent) {
-              dotColor = 'bg-[#EF5B5B] ring-2 ring-rose-200 scale-125';
+              dotColor = 'bg-[#07638b] ring-2 ring-sky-200 scale-125';
             } else if (isPast) {
               dotColor = wasCorrect ? 'bg-emerald-500' : 'bg-rose-400';
             }

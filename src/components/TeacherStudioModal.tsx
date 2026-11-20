@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import confetti from 'canvas-confetti';
+import { QuizImportPanel } from './QuizImportPanel';
+import { QuizReviewPanel } from './QuizReviewPanel';
 import { CefrLevel, QuizPackage, QuizQuestion } from '../types';
 import {
   Sparkles,
@@ -21,7 +22,7 @@ import {
   FolderOpen,
   Search,
 } from 'lucide-react';
-import { saveCustomQuiz, deleteCustomQuiz, getStoredCustomQuizzes, setPinnedWeeklyQuiz } from '../utils/quizUtils';
+import { saveCustomQuiz, deleteCustomQuiz, getStoredCustomQuizzes } from '../utils/quizUtils';
 import { NYELVTAN_CURRICULUM, CurriculumTopic } from '../data/curriculum';
 
 interface TeacherStudioModalProps {
@@ -30,6 +31,7 @@ interface TeacherStudioModalProps {
   onQuizCreatedOrSelected: (quiz: QuizPackage) => void;
   currentWeekNumber: number;
   onQuizDeleted?: () => void;
+  onPublished: () => void;
   onOpenChangelog?: () => void;
 }
 
@@ -39,6 +41,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   onQuizCreatedOrSelected,
   currentWeekNumber,
   onQuizDeleted,
+  onPublished,
   onOpenChangelog,
 }) => {
   const [activeTab, setActiveTab] = useState<'generator' | 'curriculum' | 'source'>('generator');
@@ -48,7 +51,6 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [generatedQuiz, setGeneratedQuiz] = useState<QuizPackage | null>(null);
-  const [copiedFbPost, setCopiedFbPost] = useState(false);
   const [customList, setCustomList] = useState<QuizPackage[]>(() => getStoredCustomQuizzes());
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
 
@@ -63,6 +65,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   // 1-Click Multi-Level Bundle State
   const [isGeneratingBundle, setIsGeneratingBundle] = useState(false);
   const [bundleQuizzes, setBundleQuizzes] = useState<QuizPackage[] | null>(null);
+  const [bundleFailures, setBundleFailures] = useState<{ level: CefrLevel; topic: string; error: string }[]>([]);
   const [copiedBundlePost, setCopiedBundlePost] = useState(false);
 
   const handleDownloadSourceZip = () => {
@@ -122,8 +125,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   const handleGenerateBundle = async () => {
     setIsGeneratingBundle(true);
     setErrorMessage(null);
-    setBundleQuizzes(null);
-    setGeneratedQuiz(null);
+    setBundleFailures([]);
 
     try {
       const response = await fetch('/api/generate-weekly-bundle', {
@@ -133,6 +135,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
       });
 
       const json = await response.json();
+      setBundleFailures(json.failures || []);
       if (!response.ok || !json.success) {
         throw new Error(json.error || 'Hiba történt a 4 szintes heti kvízcsomag generálása közben.');
       }
@@ -145,7 +148,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
           subtitle: d.description || `10 kérdéses heti feladatsor (${item.level})`,
           level: item.level as CefrLevel,
           weekNumber: Number(week) || currentWeekNumber,
-          year: 2026,
+          year: new Date().getFullYear(),
           topic: item.topic,
           badgeText: `Heti ${item.level}`,
           isCustom: true,
@@ -159,20 +162,11 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
             tip: q.tip,
           })),
         };
-        // Auto-save and auto-pin each as active weekly quiz
-        saveCustomQuiz(pkg);
-        setPinnedWeeklyQuiz(pkg.level, pkg.id);
         return pkg;
       });
 
       setBundleQuizzes(createdPackages);
-      setCustomList(getStoredCustomQuizzes());
-
-      confetti({
-        particleCount: 100,
-        spread: 80,
-        origin: { y: 0.6 },
-      });
+      setGeneratedQuiz(createdPackages[0] ?? null);
     } catch (err: any) {
       console.error(err);
       setErrorMessage(err.message || 'Nem sikerült legenerálni a 4 szintes kvízcsomagot. Ellenőrizd a kapcsolatot!');
@@ -215,7 +209,7 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
         subtitle: data.description || '10 kérdéses heti gyakorló kvíz',
         level: levelToUse,
         weekNumber: Number(week) || currentWeekNumber,
-        year: 2026,
+        year: new Date().getFullYear(),
         topic: topicToUse,
         badgeText: 'AI Hetes Kvíz',
         isCustom: true,
@@ -230,6 +224,12 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
         })),
       };
 
+      if (bundleQuizzes?.[0]?.weekNumber === newPackage.weekNumber &&
+          !bundleQuizzes.some(quiz => quiz.level === newPackage.level) &&
+          bundleFailures.some(failure => failure.level === newPackage.level && failure.topic === newPackage.topic)) {
+        setBundleQuizzes(current => current ? [...current, newPackage].sort((a, b) => a.level.localeCompare(b.level)) : current);
+        setBundleFailures(failures => failures.filter(failure => failure.level !== newPackage.level));
+      }
       setGeneratedQuiz(newPackage);
     } catch (err: any) {
       console.error(err);
@@ -240,11 +240,27 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
   };
 
   const handleSaveAndUse = (quizToSave: QuizPackage) => {
+    updateDraft(quizToSave);
     saveCustomQuiz(quizToSave);
-    setPinnedWeeklyQuiz(quizToSave.level, quizToSave.id);
     setCustomList(getStoredCustomQuizzes());
     onQuizCreatedOrSelected(quizToSave);
     onClose();
+  };
+
+  const updateDraft = (quiz: QuizPackage) => {
+    setBundleQuizzes(current => current?.map(item => item.id === quiz.id ? quiz : item) ?? null);
+    setGeneratedQuiz(quiz);
+  };
+
+  const handlePublished = (quiz: QuizPackage) => {
+    updateDraft(quiz);
+    try {
+      saveCustomQuiz(quiz);
+      setCustomList(getStoredCustomQuizzes());
+      onPublished();
+    } catch {
+      setErrorMessage('A kvíz közzétéve. A helyi másolat mentése sikertelen, másold ki a linket.');
+    }
   };
 
   const handleDeleteSaved = (quiz: QuizPackage, e: React.MouseEvent) => {
@@ -258,29 +274,6 @@ export const TeacherStudioModal: React.FC<TeacherStudioModalProps> = ({
     }
   };
 
-  const getFacebookPostTemplate = (quiz: QuizPackage) => {
-    return `📢 SZIA CSOPORT! MEGÉRKEZETT A HETI KVÍZÜNK! 🇬🇧✨
-📅 ${quiz.weekNumber}. hét | 🎯 Szint: ${quiz.level} (${quiz.topic})
-
-Készítettünk egy 10 kérdéses villámtesztet részletes magyar magyarázatokkal és anyanyelvi kiejtéssel:
-👉 "${quiz.title}"
-
-🔍 Ízelítő az 1. kérdésből:
-"${quiz.questions[0]?.question}"
-
-Teszteld le a tudásod itt: 👇
-${window.location.origin}/?level=${quiz.level}&quiz=${quiz.id}
-
-Kommentben írjátok meg, hány pontot értetek el! 🏆`;
-  };
-
-  const handleCopyFbPost = (quiz: QuizPackage) => {
-    const text = getFacebookPostTemplate(quiz);
-    navigator.clipboard.writeText(text);
-    setCopiedFbPost(true);
-    setTimeout(() => setCopiedFbPost(false), 3000);
-  };
-
   const getBundleFacebookPost = (quizzes: QuizPackage[], weekNo: number) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://gyakorlatiasangol.hu';
     const a1 = quizzes.find((q) => q.level === 'A1');
@@ -292,16 +285,16 @@ Kommentben írjátok meg, hány pontot értetek el! 🏆`;
 📅 ${weekNo}. HÉT | 10-10 kérdéses villámtesztek azonnali magyar magyarázatokkal és kiejtéssel:
 
 🟢 A1 KEZDŐ: "${a1?.title || 'Kezdő heti feladatsor'}"
-👉 Teszteld le itt: ${origin}/?level=A1&quiz=${a1?.id || ''}
+👉 Teszteld le itt: ${origin}/?level=A1&quiz=${a1?.publishedId || ''}
 
 🟡 A2 ALAPFOK / ÚJRAKEZDŐ: "${a2?.title || 'Alapfokú heti feladatsor'}"
-👉 Teszteld le itt: ${origin}/?level=A2&quiz=${a2?.id || ''}
+👉 Teszteld le itt: ${origin}/?level=A2&quiz=${a2?.publishedId || ''}
 
 🟠 B1 KÖZÉPHALADÓ: "${b1?.title || 'Középhaladó heti feladatsor'}"
-👉 Teszteld le itt: ${origin}/?level=B1&quiz=${b1?.id || ''}
+👉 Teszteld le itt: ${origin}/?level=B1&quiz=${b1?.publishedId || ''}
 
 🟣 B2 HALADÓ: "${b2?.title || 'Haladó heti feladatsor'}"
-👉 Teszteld le itt: ${origin}/?level=B2&quiz=${b2?.id || ''}
+👉 Teszteld le itt: ${origin}/?level=B2&quiz=${b2?.publishedId || ''}
 
 🎯 Nem vagy biztos benne, melyik szint a tiéd? Töltsd ki a 20 kérdéses szintfelmérőt az oldalon!
 Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén! 🏆👇`;
@@ -327,28 +320,37 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
   });
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div className="quiz-dialog-backdrop">
       <div
-        className={`bg-white rounded-3xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col transition-all ${
-          activeTab === 'source' ? 'max-w-5xl' : 'max-w-2xl'
+        role="dialog"
+        aria-labelledby="teacher-studio-title"
+        className={`quiz-dialog ${
+          activeTab === 'source' ? 'max-w-5xl' : 'max-w-3xl'
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-900 flex items-center justify-center shadow-xs">
+        <div className="quiz-dialog-heading teacher-studio-heading">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="quiz-dialog-icon bg-[#ede3fa] text-[#62408d]">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-medium text-slate-900 tracking-tight">
+              <h2 id="teacher-studio-title" className="text-lg font-bold leading-tight tracking-tight sm:text-2xl">
                 Tanári Vezérlő & AI Kvízkészítő
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Készíts új 10 kérdéses heti csomagokat a közösségnek másodpercek alatt!
+              <p className="mt-1 text-sm text-[#426075]">
+                Heti kvízek készítése, importálása és ellenőrzése.
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
+          <button
+            onClick={onClose}
+            aria-label="Tanári Stúdió bezárása"
+            className="quiz-dialog-close self-start"
+          >
+            <X className="w-5 h-5" aria-hidden="true" />
+          </button>
+          <div className="col-span-2 flex flex-wrap items-center gap-1.5">
             <button
               onClick={handleDownloadSourceZip}
               disabled={isDownloadingZip}
@@ -365,54 +367,40 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 className="py-1 px-2 sm:px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] sm:text-xs font-medium transition flex items-center space-x-1 cursor-pointer"
                 title="Rendszerverzió és funkciókalauz megtekintése"
               >
-                <span>v2.8 Útmutató</span>
+                <span>4.0 útmutató</span>
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+
           </div>
         </div>
 
         {/* Tabs: AI Generator vs 100 Témás Tematika vs Forráskód */}
-        <div className="flex flex-wrap border-b border-slate-200 shrink-0 pt-2">
+        <div className="flex flex-wrap gap-1.5 py-3 shrink-0">
           <button
             onClick={() => setActiveTab('generator')}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'generator'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'generator'}
+            className="quiz-dialog-tab"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span>Kvízgeneráló & Szerkesztő</span>
+            <span>Kvízgenerálás és szerkesztés</span>
           </button>
 
           <button
             onClick={() => setActiveTab('curriculum')}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'curriculum'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'curriculum'}
+            className="quiz-dialog-tab"
           >
             <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
-            <span>100 Témás Nyelvtan (A1-B2)</span>
+            <span>Nyelvtani tematika (A1–B2)</span>
           </button>
 
           <button
             onClick={handleOpenSourceTab}
-            className={`py-2 px-3 sm:px-4 text-xs font-bold border-b-2 transition flex items-center space-x-1.5 cursor-pointer ${
-              activeTab === 'source'
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            }`}
+            aria-pressed={activeTab === 'source'}
+            className="quiz-dialog-tab"
           >
             <Code2 className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Forráskód (src, components, package.json)</span>
+            <span>Forráskód</span>
           </button>
         </div>
 
@@ -423,13 +411,13 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
               {/* ========================================================================= */}
               {/* 1-CLICK MULTI-LEVEL WEEKLY BUNDLE GENERATOR (A1 + A2 + B1 + B2) */}
               {/* ========================================================================= */}
-              <div className="bg-gradient-to-r from-amber-50 via-emerald-50 to-sky-50 border-2 border-emerald-400/80 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="bg-[#edf7fc] border border-[#b9d9e9] rounded-2xl p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-amber-950 px-2 py-0.5 rounded-md shadow-2xs flex items-center space-x-1">
                         <Layers className="w-3 h-3" />
-                        <span>1-Gombnyomásos Heti Csomag ⚡</span>
+                        <span>Heti csomag</span>
                       </span>
                       <span className="text-xs font-medium text-slate-700">
                         {week}. heti feladatsorok
@@ -441,17 +429,14 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     </h3>
 
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Egyetlen kattintásra a Gemini AI mind a 4 szintre kiválaszt egy véletlenszerű tantervi témát, és legenerálja a heti 10-10 kérdéses feladatsort magyar magyarázatokkal!
+                      Egyetlen kattintásra a AI mind a 4 szintre kiválaszt egy véletlenszerű tantervi témát, és legenerálja a heti 10-10 kérdéses feladatsort magyar magyarázatokkal!
                     </p>
                   </div>
 
                   <button
                     onClick={handleGenerateBundle}
                     disabled={isGeneratingBundle || isLoading}
-                    className="py-3 px-4 rounded-xl font-bold text-xs sm:text-sm text-slate-900 tracking-tight flex items-center justify-center space-x-2 transition shadow-md shrink-0 cursor-pointer disabled:opacity-50"
-                    style={{
-                      background: 'linear-gradient(90deg, #facc15 0%, #34d399 50%, #38bdf8 100%)',
-                    }}
+                    className="quiz-primary min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold disabled:opacity-50"
                   >
                     {isGeneratingBundle ? (
                       <>
@@ -461,7 +446,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        <span>Heti 4 Kvíz Generálása 🚀</span>
+                        <span>4 heti kvíz generálása</span>
                       </>
                     )}
                   </button>
@@ -471,7 +456,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 {isGeneratingBundle && (
                   <div className="p-3 bg-white/90 rounded-xl border border-emerald-200 text-xs space-y-2 animate-in fade-in">
                     <div className="flex items-center justify-between font-bold text-slate-800 text-[11px]">
-                      <span>Gemini AI dolgozik mind a 4 szinten (automatikus terhelésvédelemmel)...</span>
+                      <span>AI dolgozik mind a 4 szinten (automatikus terhelésvédelemmel)...</span>
                       <span className="text-emerald-700">Folyamatban</span>
                     </div>
                     <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] font-extrabold">
@@ -483,6 +468,21 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   </div>
                 )}
 
+                {bundleFailures.length > 0 && (
+                  <ul aria-label="Sikertelen szintek" className="space-y-2">
+                    {bundleFailures.map(({ level: failedLevel, topic: failedTopic, error }) => (
+                      <li key={failedLevel} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
+                        <p><strong>{failedLevel}</strong> · {failedTopic}</p>
+                        <p>{error}</p>
+                        <button className="quiz-dialog-tab mt-2" onClick={() => {
+                          setLevel(failedLevel);
+                          setTopic(failedTopic);
+                        }}>{failedLevel} beállítása külön generáláshoz</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 {/* Bundle Results Preview */}
                 {bundleQuizzes && (
                   <div className="bg-white rounded-2xl p-4 border border-emerald-300 shadow-xs space-y-3 animate-in fade-in">
@@ -490,11 +490,11 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                       <div className="flex items-center space-x-2">
                         <CheckCheck className="w-5 h-5 text-emerald-600" />
                         <span className="font-extrabold text-xs sm:text-sm text-emerald-950">
-                          Sikeresen elkészült mind a 4 heti kvíz ({week}. hét)!
+                          Elkészült {bundleQuizzes.length} heti kvíz a négyből ({bundleQuizzes[0].weekNumber}. hét).
                         </span>
                       </div>
                       <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-                        ⭐ Automatikusan kitűzve aktív heti feladatnak
+                        Kérdésenként ellenőrizhető tervezetek
                       </span>
                     </div>
 
@@ -523,6 +523,9 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                           </div>
                           <div className="font-bold text-slate-900 line-clamp-1">{bq.title}</div>
                           <div className="text-[11px] text-slate-500 line-clamp-1 italic">{bq.topic}</div>
+                          <button className="quiz-dialog-tab" onClick={() => setGeneratedQuiz(bq)}>
+                            {bq.level} {bq.publishedId ? 'közzétett kvíz' : 'ellenőrzése'}
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -531,6 +534,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                     <div className="flex flex-col sm:flex-row gap-2 pt-1">
                       <button
                         onClick={() => handleCopyBundlePost(bundleQuizzes)}
+                        disabled={bundleQuizzes.length !== 4 || bundleQuizzes.some(quiz => !quiz.publishedId)}
                         className="flex-1 py-2.5 px-3 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-xs cursor-pointer"
                         title="Formázott Facebook bejegyzés a 4 szint közvetlen linkjeivel a csoport számára"
                       >
@@ -538,16 +542,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                         <span>{copiedBundlePost ? 'Teljes poszt másolva!' : 'Heti 4-es Facebook poszt másolása 📋'}</span>
                       </button>
 
-                      <button
-                        onClick={() => {
-                          onQuizCreatedOrSelected(bundleQuizzes[0]);
-                          onClose();
-                        }}
-                        className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center justify-center space-x-1.5 transition shadow-xs cursor-pointer"
-                      >
-                        <span>Megnyitás az oldalon</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+
                     </div>
                   </div>
                 )}
@@ -556,7 +551,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
               {/* ========================================================================= */}
               {/* SINGLE QUIZ GENERATOR & CUSTOMIZER */}
               {/* ========================================================================= */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3.5">
+              <div className="bg-white p-4 rounded-2xl border border-[#cce1eb] space-y-3.5">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-medium uppercase tracking-wider text-slate-700">
                     Egyedi Kvíz Generálása vagy Módosítása:
@@ -655,7 +650,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                   {isLoading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-slate-900" />
-                      <span>10 kérdéses kvíz generálása Gemini AI-val...</span>
+                      <span>10 kérdéses kvíz generálása AI-val...</span>
                     </>
                   ) : (
                     <>
@@ -670,7 +665,7 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
                   <div className="flex items-center space-x-2">
                     <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                    <span className="font-medium leading-relaxed">{errorMessage}</span>
+                    <span role="alert" className="font-medium leading-relaxed">{errorMessage}</span>
                   </div>
                   <button
                     onClick={() => handleGenerateAI()}
@@ -681,56 +676,19 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                 </div>
               )}
 
-              {/* Generated Single Quiz Preview Card */}
+              <QuizImportPanel level={level} topic={topic} weekNumber={Number(week) || currentWeekNumber}
+                disabled={isLoading || isGeneratingBundle}
+                onImport={quiz => { setErrorMessage(null); setGeneratedQuiz(quiz); }}
+              />
+
               {generatedQuiz && (
-                <div className="bg-emerald-50/70 border-2 border-emerald-400 rounded-2xl p-4 space-y-3 animate-in fade-in">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white px-2 py-0.5 rounded-md">
-                        Sikeresen elkészült!
-                      </span>
-                      <h3 className="text-base font-medium text-slate-900 tracking-tight mt-1">
-                        {generatedQuiz.title}
-                      </h3>
-                      <p className="text-xs text-slate-600">{generatedQuiz.subtitle}</p>
-                    </div>
-                    <span className="text-xs font-bold text-slate-700 bg-white px-2 py-1 rounded-md border border-slate-200">
-                      {generatedQuiz.questions.length} kérdés
-                    </span>
-                  </div>
-
-                  {/* Sample preview */}
-                  <div className="bg-white p-3 rounded-xl border border-emerald-200 text-xs space-y-1.5">
-                    <span className="font-bold text-emerald-800">1. Kérdés előnézete:</span>
-                    <div className="font-bold text-slate-900">{generatedQuiz.questions[0].question}</div>
-                    <div className="text-slate-600">
-                      Helyes válasz: <strong>{generatedQuiz.questions[0].options[generatedQuiz.questions[0].correctIndex]}</strong>
-                    </div>
-                    <div className="text-slate-500 italic">
-                      HU: {generatedQuiz.questions[0].translation}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <button
-                      onClick={() => handleSaveAndUse(generatedQuiz)}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs sm:text-sm flex items-center justify-center space-x-1.5 shadow-sm transition cursor-pointer"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>Mentés és kitűzés az oldalon ⭐</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleCopyFbPost(generatedQuiz)}
-                      className="py-2.5 px-3 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold text-xs flex items-center justify-center space-x-1 transition cursor-pointer"
-                      title="Készíts előre formázott posztot a csoportnak"
-                    >
-                      {copiedFbPost ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      <span>{copiedFbPost ? 'Poszt másolva!' : 'Facebook poszt szöveg'}</span>
-                    </button>
-                  </div>
-                </div>
+                <QuizReviewPanel
+                  key={generatedQuiz.id}
+                  quiz={generatedQuiz}
+                  onDraftChange={updateDraft}
+                  onSaveLocal={handleSaveAndUse}
+                  onPublished={handlePublished}
+                />
               )}
 
               {/* Already Saved Custom Quizzes */}
@@ -763,6 +721,9 @@ Kommentben írjátok meg a csoportban, kinek hány pont lett a saját szintjén!
                             className="py-1 px-2.5 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition cursor-pointer"
                           >
                             Megnyitás
+                          </button>
+                          <button className="quiz-dialog-tab" onClick={() => setGeneratedQuiz(cq)}>
+                            {cq.publishedId ? 'Megosztás' : 'Ellenőrzés'}
                           </button>
                           <button
                             onClick={(e) => handleDeleteSaved(cq, e)}

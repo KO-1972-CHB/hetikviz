@@ -2,7 +2,5 @@
   "name": "Gyakorlatias Angol - Heti Kvízek (A1-B2)",
   "description": "Hetente megújuló 10 kérdéses angol nyelvtani és szókincs kvízek A1, A2, B1 és B2 szinteken részletes magyar magyarázatokkal, hangos kiejtéssel és Facebook csoport megosztással.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }

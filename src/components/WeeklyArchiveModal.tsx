@@ -46,33 +46,34 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
 
   const handleCopyLink = (quiz: QuizPackage, e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/?level=${quiz.level}&quiz=${quiz.id}`;
+    const url = `${window.location.origin}/?level=${quiz.level}&quiz=${encodeURIComponent(quiz.publishedId || quiz.id)}`;
     navigator.clipboard.writeText(url);
     setCopiedId(quiz.id);
     setTimeout(() => setCopiedId(null), 2500);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 max-h-[90vh] flex flex-col">
+    <div className="quiz-dialog-backdrop">
+      <div role="dialog" aria-labelledby="archive-title" className="quiz-dialog max-w-3xl">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+        <div className="quiz-dialog-heading">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="quiz-dialog-icon bg-[#d3eaf6] text-[#07577d]">
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-medium text-slate-900 tracking-tight">
+              <h2 id="archive-title" className="text-lg font-bold leading-tight tracking-tight sm:text-2xl">
                 Heti Kvíz Archívum & Csomagok
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="mt-1 text-sm text-[#426075]">
                 Böngészd az összes 10 kérdéses heti feladatsort szintek szerint
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition"
+            aria-label="Archívum bezárása"
+            className="quiz-dialog-close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -84,25 +85,23 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
-              type="text"
+              type="search"
+              aria-label="Keresés a heti kvízek között"
               placeholder="Keresés témára vagy nyelvtani kifejezésre..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-emerald-500 bg-slate-50/50"
+              className="quiz-dialog-input w-full min-h-11 pl-9 pr-3 text-sm"
             />
           </div>
 
           {/* Level Filter Tabs */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
             {(['ALL', 'A1', 'A2', 'B1', 'B2'] as const).map((lvl) => (
               <button
                 key={lvl}
                 onClick={() => setSelectedLevelFilter(lvl)}
-                className={`py-1.5 px-3 rounded-lg text-xs font-bold transition shrink-0 ${
-                  selectedLevelFilter === lvl
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                aria-pressed={selectedLevelFilter === lvl}
+                className="quiz-dialog-tab"
               >
                 {lvl === 'ALL' ? 'Minden Szint' : `${lvl} Szint`}
               </button>
@@ -111,7 +110,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
         </div>
 
         {/* List of quizzes */}
-        <div className="overflow-y-auto py-2 space-y-2.5 pr-1 flex-1">
+        <div className="overflow-y-auto py-2 space-y-2.5 px-1 flex-1 min-h-0">
           {filteredQuizzes.length === 0 ? (
             <div className="text-center py-10 text-slate-400 text-sm">
               Nem található a keresésnek megfelelő kvízcsomag.
@@ -130,13 +129,13 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                   }}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                     isCurrent
-                      ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-400/30'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300'
+                      ? 'bg-[#edf7fc] border-[#5797b3]'
+                      : 'bg-white hover:bg-[#f6fbfd] border-[#cce1eb] hover:border-[#80b1c9]'
                   }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                      <span className="level-badge" data-archive-level={q.level}>
                         {q.level}
                       </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
@@ -169,7 +168,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-1.5 shrink-0 self-end sm:self-center flex-wrap gap-y-1">
+                  <div className="flex flex-wrap items-center justify-end gap-1.5 self-end sm:self-center">
                     {isAdmin && (
                       <>
                         {onTogglePinQuiz && (
@@ -227,6 +226,7 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                       </>
                     )}
 
+                    {(!q.isCustom || q.publishedId) && (
                     <button
                       onClick={(e) => handleCopyLink(q, e)}
                       className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 text-xs font-semibold flex items-center space-x-1 cursor-pointer"
@@ -244,8 +244,9 @@ export const WeeklyArchiveModal: React.FC<WeeklyArchiveModalProps> = ({
                         </>
                       )}
                     </button>
+                    )}
 
-                    <button className="py-2 px-3.5 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center space-x-1 hover:bg-slate-800 transition shadow-xs cursor-pointer">
+                    <button aria-label={`${q.title} – Kitöltés`} className="quiz-primary min-h-11 items-center gap-1 rounded-xl px-3.5 text-sm font-bold">
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Kitöltés</span>
                     </button>

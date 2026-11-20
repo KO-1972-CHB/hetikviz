@@ -21,6 +21,7 @@ export interface QuizPackage {
   badgeText?: string;
   questions: QuizQuestion[];
   isCustom?: boolean;
+  publishedId?: string;
 }
 
 export interface UserQuizAttempt {

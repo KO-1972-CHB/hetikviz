@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { QuizPackage, QuizQuestion } from '../types';
 import { generateShareText, playEnglishPronunciation } from '../utils/quizUtils';
-import { Trophy, CheckCircle2, XCircle, RotateCcw, Volume2, Sparkles, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { Trophy, CheckCircle2, XCircle, RotateCcw, Volume2, Sparkles, Copy, Check, Bookmark, Eye, EyeOff } from 'lucide-react';
 
 interface QuizResultProps {
   quiz: QuizPackage;
@@ -10,6 +10,9 @@ interface QuizResultProps {
   totalQuestions: number;
   selectedAnswers: (number | null)[];
   onRetry: () => void;
+  isSaved: (question: QuizQuestion) => boolean;
+  onToggleSaved: (question: QuizQuestion) => void;
+  saveError: string;
   onRetryMistakes?: (mistakeQuestions: QuizQuestion[]) => void;
   onSelectAnotherLevel: () => void;
   onOpenArchive: () => void;
@@ -21,6 +24,9 @@ export const QuizResult: React.FC<QuizResultProps> = ({
   totalQuestions,
   selectedAnswers,
   onRetry,
+  isSaved,
+  onToggleSaved,
+  saveError,
   onRetryMistakes,
   onSelectAnotherLevel,
   onOpenArchive,
@@ -30,6 +36,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
   const percent = Math.round((score / totalQuestions) * 100);
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     // Confetti fires only for great performance: 80% and above (8/10, 9/10, 10/10)
     if (percent >= 80) {
       if (score === totalQuestions) {
@@ -113,15 +120,15 @@ export const QuizResult: React.FC<QuizResultProps> = ({
     : mistakeItems.map((m) => ({ ...m, isMistake: true }));
 
   return (
-    <div className="w-full max-w-xl mx-auto px-4 py-6">
-      <div className="bg-[#FAF7F2] border border-[#f1e9dc] rounded-3xl p-5 sm:p-7 shadow-sm">
+    <div className="w-full max-w-3xl mx-auto px-4 py-6">
+      <div className="quiz-surface rounded-3xl p-5 sm:p-7">
         {/* Score Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-tr from-amber-400 to-emerald-400 text-white shadow-md mb-3">
-            <Trophy className="w-8 h-8 text-slate-900" />
+        <div className="text-center mb-6 rounded-2xl bg-[#edf6fb] p-4 sm:p-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#d3eaf6] text-[#07577d] mb-3">
+            <Trophy className="w-7 h-7" />
           </div>
 
-          <div className="inline-block px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider mb-2 shadow-xs" style={{ background: '#EF5B5B', color: 'white' }}>
+          <div className="mb-2 block text-sm font-semibold text-[#07577d]">
             {quiz.weekNumber}. heti kvíz eredmény
           </div>
 
@@ -166,7 +173,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
               </span>
             </h3>
 
-            {mistakeItems.length > 0 && (
+            {(mistakeItems.length > 0 || !showAllQuestions) && (
               <button
                 onClick={() => setShowAllQuestions(!showAllQuestions)}
                 className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline flex items-center space-x-1"
@@ -186,7 +193,8 @@ export const QuizResult: React.FC<QuizResultProps> = ({
             )}
           </div>
 
-          {mistakeItems.length === 0 ? (
+          {saveError && <p role="alert" className="mb-3 text-sm text-rose-800">{saveError}</p>}
+          {mistakeItems.length === 0 && !showAllQuestions ? (
             /* 100% correct, no mistakes */
             <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border-2 border-emerald-300 text-center space-y-1.5">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
@@ -214,7 +222,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
                         : 'bg-rose-50/70 border-2 border-rose-300'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
                       <div className="flex items-center space-x-2">
                         {isCorrect ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -240,6 +248,10 @@ export const QuizResult: React.FC<QuizResultProps> = ({
                         title="Kiejtés meghallgatása"
                       >
                         <Volume2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button className="quiz-dialog-tab" aria-pressed={isSaved(q)} onClick={() => onToggleSaved(q)}>
+                        <Bookmark aria-hidden="true" size={16} />
+                        {isSaved(q) ? 'Mentve · eltávolítás' : 'Mentés gyakorláshoz'}
                       </button>
                     </div>
 
@@ -311,7 +323,7 @@ export const QuizResult: React.FC<QuizResultProps> = ({
           {/* Full Quiz Retry button with safe arrow-function execution */}
           <button
             onClick={() => onRetry()}
-            className="w-full py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-sm sm:text-base flex items-center justify-center space-x-2 transition shadow-sm cursor-pointer"
+            className="quiz-primary w-full py-3.5 px-4 rounded-2xl gap-2 font-bold text-sm sm:text-base"
           >
             <RotateCcw className="w-4 h-4" />
             <span>Kvíz újratöltése (Mind a {totalQuestions} kérdés)</span>
